@@ -154,6 +154,7 @@
   ***********************************************************************************************************
   * Interrupt callback functions
   */
+  #if ((STM32_CORE_VERSION_MINOR<=8) & (STM32_CORE_VERSION_MAJOR==1)) 
   void oneMSInterval(HardwareTimer*){oneMSInterval();}
   void boostInterrupt(HardwareTimer*){boostInterrupt();}
   void fuelSchedule1Interrupt(HardwareTimer*){fuelSchedule1Interrupt();}
@@ -190,5 +191,5 @@
   #if (IGN_CHANNELS >= 8)
   void ignitionSchedule8Interrupt(HardwareTimer*){ignitionSchedule8Interrupt();}
   #endif
-
+  #endif //End core<=1.8
 #endif
