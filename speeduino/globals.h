@@ -540,6 +540,8 @@ struct statuses {
   byte ASEValue;
   uint16_t vss; /**< Current speed reading. Natively stored in kph and converted to mph in TS if required */
   byte gear; /**< Current gear (Calculated from vss) */
+  byte fuelPressure; /**< Fuel pressure in PSI */
+  byte oilPressure; /**< Oil pressure in PSI */
 };
 
 /**
@@ -550,7 +552,7 @@ struct statuses {
  */
 struct config2 {
 
-  byte aseTsnDelay;
+  byte aseTaperTime;
   byte aeColdPct;  //AE cold clt modifier %
   byte aeColdTaperMin; //AE cold modifier, taper start temp (full modifier), was ASE in early versions
   byte aeMode : 2; /**< Acceleration Enrichment mode. 0 = TPS, 1 = MAP. Values 2 and 3 reserved for potential future use (ie blended TPS / MAP) */
@@ -1066,7 +1068,20 @@ struct config10 {
   uint16_t vvtCLMaxAng; //Bytes 132-133
 
   byte crankingEnrichTaper; //Byte 134
-  byte unused11_135_191[57]; //Bytes 135-191
+
+  byte fuelPressureEnable : 1;
+  byte oilPressureEnable : 1;
+  byte unused10_135 : 6;
+
+  byte fuelPressurePin : 4;
+  byte oilPressurePin : 4;
+
+  int8_t fuelPressureMin;
+  byte fuelPressureMax;
+  int8_t oilPressureMin;
+  byte oilPressureMax;
+
+  byte unused11_135_191[51]; //Bytes 135-191
 
 #if defined(CORE_AVR)
   };
@@ -1138,6 +1153,8 @@ extern byte pinFlex; //Pin with the flex sensor attached
 extern byte pinVSS; 
 extern byte pinBaro; //Pin that an external barometric pressure sensor is attached to (If used)
 extern byte pinResetControl; // Output pin used control resetting the Arduino
+extern byte pinFuelPressure;
+extern byte pinOilPressure;
 #ifdef USE_MC33810
   //If the MC33810 IC\s are in use, these are the chip select pins
   extern byte pinMC33810_1_CS;

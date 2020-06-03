@@ -249,7 +249,7 @@ void command()
       break;
 
     case 'Q': // send code version
-      Serial.print(F("speeduino 202005"));
+      Serial.print(F("speeduino 202006-dev"));
       break;
 
     case 'r': //New format for the optimised OutputChannels
@@ -279,7 +279,7 @@ void command()
       break;
 
     case 'S': // send code version
-      Serial.print(F("Speeduino 2020.05"));
+      Serial.print(F("Speeduino 2020.06-dev"));
       currentStatus.secl = 0; //This is required in TS3 due to its stricter timings
       break;
 
@@ -650,6 +650,8 @@ void sendValues(uint16_t offset, uint16_t packetLength, byte cmd, byte portNum)
   fullStatus[101] = lowByte(currentStatus.vss);
   fullStatus[102] = highByte(currentStatus.vss);
   fullStatus[103] = currentStatus.gear;
+  fullStatus[104] = currentStatus.fuelPressure;
+  fullStatus[105] = currentStatus.oilPressure;
 
   for(byte x=0; x<packetLength; x++)
   {
