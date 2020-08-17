@@ -268,7 +268,7 @@ void command()
           offset = word(Serial.read(), tmp);
           tmp = Serial.read();
           length = word(Serial.read(), tmp);
-          sendValues(offset, length,cmd, 0);
+          sendValues(offset, length, cmd, 0);
         }
         else
         {
@@ -414,18 +414,18 @@ void command()
     case 'Z': //Totally non-standard testing function. Will be removed once calibration testing is completed. This function takes 1.5kb of program space! :S
     #ifndef SMALL_FLASH_MODE
       Serial.println(F("Coolant"));
-      for (int x = 0; x < CALIBRATION_TABLE_SIZE; x++)
+      for (int x = 0; x < 32; x++)
       {
-        Serial.print(x);
+        Serial.print(cltCalibration_bins[x]);
         Serial.print(", ");
-        Serial.println(cltCalibrationTable[x]);
+        Serial.println(cltCalibration_values[x]);
       }
       Serial.println(F("Inlet temp"));
-      for (int x = 0; x < CALIBRATION_TABLE_SIZE; x++)
+      for (int x = 0; x < 32; x++)
       {
-        Serial.print(x);
+        Serial.print(iatCalibration_bins[x]);
         Serial.print(", ");
-        Serial.println(iatCalibrationTable[x]);
+        Serial.println(iatCalibration_values[x]);
       }
       Serial.println(F("O2"));
       for (int x = 0; x < CALIBRATION_TABLE_SIZE; x++)
@@ -629,8 +629,7 @@ void sendValues(uint16_t offset, uint16_t packetLength, byte cmd, byte portNum)
   fullStatus[82] = highByte(currentStatus.PW4); //Pulsewidth 4 multiplied by 10 in ms. Have to convert from uS to mS.
 
   fullStatus[83] = currentStatus.status3;
-
-  fullStatus[84] = currentStatus.nChannels; //THIS IS CURRENTLY UNUSED!
+  fullStatus[84] = currentStatus.engineProtectStatus;
   fullStatus[85] = lowByte(currentStatus.fuelLoad);
   fullStatus[86] = highByte(currentStatus.fuelLoad);
   fullStatus[87] = lowByte(currentStatus.ignLoad);
@@ -639,9 +638,9 @@ void sendValues(uint16_t offset, uint16_t packetLength, byte cmd, byte portNum)
   fullStatus[90] = highByte(currentStatus.dwell);
   fullStatus[91] = currentStatus.CLIdleTarget;
   fullStatus[92] = currentStatus.mapDOT;
-  fullStatus[93] = (int8_t)currentStatus.vvtAngle;
-  fullStatus[94] = currentStatus.vvtTargetAngle;
-  fullStatus[95] = currentStatus.vvtDuty;
+  fullStatus[93] = (int8_t)currentStatus.vvt1Angle;
+  fullStatus[94] = currentStatus.vvt1TargetAngle;
+  fullStatus[95] = currentStatus.vvt1Duty;
   fullStatus[96] = lowByte(currentStatus.flexBoostCorrection);
   fullStatus[97] = highByte(currentStatus.flexBoostCorrection);
   fullStatus[98] = currentStatus.baroCorrection;
@@ -652,6 +651,11 @@ void sendValues(uint16_t offset, uint16_t packetLength, byte cmd, byte portNum)
   fullStatus[103] = currentStatus.gear;
   fullStatus[104] = currentStatus.fuelPressure;
   fullStatus[105] = currentStatus.oilPressure;
+  fullStatus[106] = currentStatus.wmiPW;
+  fullStatus[107] = currentStatus.wmiEmpty;
+  fullStatus[108] = (int8_t)currentStatus.vvt2Angle;
+  fullStatus[109] = currentStatus.vvt2TargetAngle;
+  fullStatus[110] = currentStatus.vvt2Duty;
 
   for(byte x=0; x<packetLength; x++)
   {
@@ -659,8 +663,19 @@ void sendValues(uint16_t offset, uint16_t packetLength, byte cmd, byte portNum)
     #if defined(CANSerial_AVAILABLE)
       else if (portNum == 3){ CANSerial.write(fullStatus[offset+x]); }
     #endif
-  }
 
+    //Check whether the tx buffer still has space
+    if(Serial.availableForWrite() < 1) 
+    { 
+      //tx buffer is full. Store the current state so it can be resumed later
+      inProgressOffset = offset + x + 1;
+      inProgressLength = packetLength - x - 1;
+      serialInProgress = true;
+      return;
+    }
+    
+  }
+  serialInProgress = false;
   // Reset any flags that are being used to trigger page refreshes
   BIT_CLEAR(currentStatus.status3, BIT_STATUS3_VSS_REFRESH);
 
@@ -1011,6 +1026,21 @@ void receiveValue(uint16_t valueOffset, byte newValue)
       fuelTable2.cacheIsValid = false; //Invalid the tables cache to ensure a lookup of new values
       break;
 
+    case wmiMapPage:
+      if (valueOffset < 64) //New value is part of the wmi map
+      {
+        wmiTable.values[7 - (valueOffset / 8)][valueOffset % 8] = newValue;
+      }
+      else if (valueOffset < 72) //New value is on the X (RPM) axis of the wmi table
+      {
+        wmiTable.axisX[(valueOffset - 64)] = int(newValue) * TABLE_RPM_MULTIPLIER;
+      }
+      else if (valueOffset < 80) //New value is on the Y (MAP) axis of the boost table
+      {
+        wmiTable.axisY[(7 - (valueOffset - 72))] = int(newValue) * TABLE_LOAD_MULTIPLIER;
+      }
+      break;
+
     default:
       break;
   }
@@ -1114,6 +1144,19 @@ void sendPage()
     case fuelMap2Page:
       currentTable = fuelTable2;
       break;
+
+    case wmiMapPage:
+    {
+      //Need to perform a translation of the values[MAP/TPS][RPM] into the MS expected format
+      byte response[80]; //Bit hacky, but send 1 map at a time (Each map is 8x8, so 64 + 8 + 8)
+
+      //Boost table
+      for (int x = 0; x < 64; x++) { response[x] = wmiTable.values[7 - (x / 8)][x % 8]; }
+      for (int x = 64; x < 72; x++) { response[x] = byte(wmiTable.axisX[(x - 64)] / TABLE_RPM_MULTIPLIER); }
+      for (int y = 72; y < 80; y++) { response[y] = byte(wmiTable.axisY[7 - (y - 72)] / TABLE_LOAD_MULTIPLIER); }
+      Serial.write((byte *)&response, 80);
+      break;
+    }
 
     default:
     #ifndef SMALL_FLASH_MODE
@@ -1631,7 +1674,15 @@ byte getPageValue(byte page, uint16_t valueAddress)
         else if(valueAddress < 272) { returnValue =  byte(fuelTable2.axisX[(valueAddress - 256)] / TABLE_RPM_MULTIPLIER); }  //RPM Bins for VE table (Need to be dvidied by 100)
         else if (valueAddress < 288) { returnValue = byte(fuelTable2.axisY[15 - (valueAddress - 272)] / TABLE_LOAD_MULTIPLIER); } //MAP or TPS bins for VE table
         break;
-
+        
+    case wmiMapPage:
+          if(valueAddress < 80)
+          {
+            if(valueAddress < 64) { returnValue = wmiTable.values[7 - (valueAddress / 8)][valueAddress % 8]; }
+            else if(valueAddress < 72) { returnValue = byte(wmiTable.axisX[(valueAddress - 64)] / TABLE_RPM_MULTIPLIER); }
+            else if(valueAddress < 80) { returnValue = byte(wmiTable.axisY[7 - (valueAddress - 72)] / TABLE_LOAD_MULTIPLIER); }
+          }
+        break;
     default:
     #ifndef SMALL_FLASH_MODE
         Serial.println(F("\nPage has not been implemented yet"));
@@ -1648,7 +1699,7 @@ byte getPageValue(byte page, uint16_t valueAddress)
  * 
  * @param tableID Which calibration table to process. 0 = Coolant Sensor. 1 = IAT Sensor. 2 = O2 Sensor.
  */
-void receiveCalibration(byte tableID)
+void receiveCalibration_old(byte tableID)
 {
   byte* pnt_TargetTable; //Pointer that will be used to point to the required target table
   int OFFSET, DIVISION_FACTOR, BYTES_PER_VALUE, EEPROM_START;
@@ -1657,7 +1708,7 @@ void receiveCalibration(byte tableID)
   {
     case 0:
       //coolant table
-      pnt_TargetTable = (byte *)&cltCalibrationTable;
+      //pnt_TargetTable = (byte *)&cltCalibrationTable;
       OFFSET = CALIBRATION_TEMPERATURE_OFFSET; //
       DIVISION_FACTOR = 10;
       BYTES_PER_VALUE = 2;
@@ -1665,7 +1716,7 @@ void receiveCalibration(byte tableID)
       break;
     case 1:
       //Inlet air temp table
-      pnt_TargetTable = (byte *)&iatCalibrationTable;
+      //pnt_TargetTable = (byte *)&iatCalibrationTable;
       OFFSET = CALIBRATION_TEMPERATURE_OFFSET;
       DIVISION_FACTOR = 10;
       BYTES_PER_VALUE = 2;
@@ -1756,6 +1807,81 @@ void receiveCalibration(byte tableID)
 
   }
 
+}
+
+void receiveCalibration(byte tableID)
+{
+  uint16_t* pnt_TargetTable_values; //Pointer that will be used to point to the required target table values
+  uint16_t* pnt_TargetTable_bins;   //Pointer that will be used to point to the required target table bins
+  int OFFSET, DIVISION_FACTOR, BYTES_PER_VALUE;
+
+  switch (tableID)
+  {
+    case 0:
+      //coolant table
+      pnt_TargetTable_values = (uint16_t *)&cltCalibration_values;
+      pnt_TargetTable_bins = (uint16_t *)&cltCalibration_bins;
+      OFFSET = CALIBRATION_TEMPERATURE_OFFSET; //
+      DIVISION_FACTOR = 10;
+      BYTES_PER_VALUE = 2;
+      break;
+    case 1:
+      //Inlet air temp table
+      pnt_TargetTable_values = (uint16_t *)&iatCalibration_values;
+      pnt_TargetTable_bins = (uint16_t *)&iatCalibration_bins;
+      OFFSET = CALIBRATION_TEMPERATURE_OFFSET;
+      DIVISION_FACTOR = 10;
+      BYTES_PER_VALUE = 2;
+      break;
+    case 2:
+      //O2 table
+      //pnt_TargetTable = (byte *)&o2CalibrationTable;
+      //pnt_TargetTable_values = (uint16_t *)&o2Calibration_values;
+      //pnt_TargetTable_bins = (uint16_t *)&o2Calibration_bins;
+      OFFSET = 0;
+      DIVISION_FACTOR = 1;
+      BYTES_PER_VALUE = 1;
+      break;
+
+    default:
+      OFFSET = 0;
+      //pnt_TargetTable = (byte *)&o2CalibrationTable;
+      pnt_TargetTable_values = (uint16_t *)&iatCalibration_values;
+      pnt_TargetTable_bins = (uint16_t *)&iatCalibration_bins;
+      DIVISION_FACTOR = 1;
+      BYTES_PER_VALUE = 1;
+      break; //Should never get here, but if we do, just fail back to main loop
+  }
+
+  int tempValue;
+  byte tempBuffer[2];
+
+  for (byte x = 0; x < 32; x++)
+  {
+    if (BYTES_PER_VALUE == 1)
+    {
+      while ( Serial.available() < 1 ) {}
+      tempValue = Serial.read();
+    }
+    else
+    {
+      while ( Serial.available() < 2 ) {}
+      tempBuffer[0] = Serial.read();
+      tempBuffer[1] = Serial.read();
+
+      tempValue = div(int(word(tempBuffer[1], tempBuffer[0])), DIVISION_FACTOR).quot; //Read 2 bytes, convert to word (an unsigned int), convert to signed int. These values come through * 10 from Tuner Studio
+      tempValue = ((tempValue - 32) * 5) / 9; //Convert from F to C
+    }
+    
+    //Apply the temp offset and check that it results in all values being positive
+    tempValue = tempValue + OFFSET;
+    if (tempValue < 0) { tempValue = 0; }
+
+    //pnt_TargetTable[x] = tempValue;
+    pnt_TargetTable_values[x] = tempValue;
+    pnt_TargetTable_bins[x] = (x * 32);
+  }
+  writeCalibration();
 }
 
 /*
