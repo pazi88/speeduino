@@ -370,7 +370,7 @@ void doUpdates()
 
   if(EEPROM.read(EEPROM_DATA_VERSION) == 14)
   {
-    //202006
+    //202008
 
     //MAJOR update to move the coolant, IAT and O2 calibrations to 2D tables
     int y;
@@ -383,6 +383,10 @@ void doUpdates()
       y = EEPROM_CALIBRATION_IAT_OLD + (x * 16);
       iatCalibration_values[x] = EEPROM.read(y);
       iatCalibration_bins[x] = (x * 32);
+
+      y = EEPROM_CALIBRATION_O2_OLD + (x * 16);
+      o2Calibration_values[x] = EEPROM.read(y);
+      o2Calibration_bins[x] = (x * 32);
     }
     writeCalibration();
 
@@ -403,6 +407,11 @@ void doUpdates()
       configPage10.wmiAdvBins[i] = i*100/2;
       configPage10.wmiAdvAdj[i] = OFFSET_IGNITION;
     }
+
+    //New multiply MAP option added. Set new option to be the same as old
+    configPage2.multiplyMAP = configPage2.multiplyMAP_old;
+    //New AE option added to allow for PW added in addition to existing PW multiply
+    configPage2.aeApplyMode = 0; //Set the AE mode to Multiply
 
     writeAllConfig();
     EEPROM.write(EEPROM_DATA_VERSION, 15);

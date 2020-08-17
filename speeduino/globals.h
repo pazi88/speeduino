@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include "table.h"
 #include <assert.h>
+#include "logger.h"
 
 #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__) || defined(__AVR_ATmega2561__)
   #define BOARD_DIGITAL_GPIO_PINS 54
@@ -244,6 +245,9 @@
 #define AE_MODE_TPS         0
 #define AE_MODE_MAP         1
 
+#define AE_MODE_MULTIPLIER  0
+#define AE_MODE_ADDER       1
+
 #define KNOCK_MODE_OFF      0
 #define KNOCK_MODE_DIGITAL  1
 #define KNOCK_MODE_ANALOG   2
@@ -275,6 +279,10 @@
 #define VVT_MODE_CLOSED_LOOP 2
 #define VVT_LOAD_MAP      0
 #define VVT_LOAD_TPS      1
+
+#define MULTIPLY_MAP_MODE_OFF   0
+#define MULTIPLY_MAP_MODE_BARO  1
+#define MULTIPLY_MAP_MODE_100   2
 
 #define FOUR_STROKE         0
 #define TWO_STROKE          1
@@ -327,7 +335,7 @@
 extern const char TSfirmwareVersion[] PROGMEM;
 
 extern const byte data_structure_version; //This identifies the data structure when reading / writing.
-#define NUM_PAGES     13
+#define NUM_PAGES     14
 extern const uint16_t npage_size[NUM_PAGES]; /**< This array stores the size (in bytes) of each configuration page */
 #define MAP_PAGE_SIZE 288
 
@@ -442,6 +450,8 @@ extern int ignition7StartAngle;
 extern int ignition8StartAngle;
 
 //These are variables used across multiple files
+extern byte fullStatus[LOG_ENTRY_SIZE];
+extern byte fsIntIndex[31];
 extern bool initialisationComplete; //Tracks whether the setup() function has run completely
 extern byte fpPrimeTime; //The time (in seconds, based on currentStatus.secl) that the fuel pump started priming
 extern volatile uint16_t mainLoopCount;
@@ -595,6 +605,7 @@ struct statuses {
   long vvt2Angle;
   byte vvt2TargetAngle;
   byte vvt2Duty;
+  byte outputsStatus;
 };
 
 /**
@@ -611,7 +622,9 @@ struct config2 {
   byte aeMode : 2; /**< Acceleration Enrichment mode. 0 = TPS, 1 = MAP. Values 2 and 3 reserved for potential future use (ie blended TPS / MAP) */
   byte battVCorMode : 1;
   byte SoftLimitMode : 1;
-  byte unused1_3c : 4;
+  byte unused1_3c : 1;
+  byte aeApplyMode : 1; //0 = Multiply | 1 = Add
+  byte multiplyMAP : 2; //0 = off | 1 = baro | 2 = 100
   byte wueValues[10]; //Warm up enrichment array (10 bytes)
   byte crankingPct; //Cranking enrichment
   byte pinMapping; // The board / ping mapping to be used
@@ -637,7 +650,7 @@ struct config2 {
   byte reqFuel;       //24
   byte divider;
   byte injTiming : 1;
-  byte multiplyMAP : 1;
+  byte multiplyMAP_old : 1;
   byte includeAFR : 1;
   byte hardCutType : 1;
   byte ignAlgorithm : 3;
@@ -702,7 +715,8 @@ struct config2 {
 
   byte fanWhenOff : 1;      // Only run fan when engine is running
   byte fanWhenCranking : 1;      //**< Setting whether the fan output will stay on when the engine is cranking */ 
-  byte fanUnused : 6;
+  byte fanUnused : 5;
+  byte incorporateAFR : 1;  //Incorporate AFR
   byte asePct[4];  //Afterstart enrichment (%)
   byte aseCount[4]; //Afterstart enrichment cycles. This is the number of ignition cycles that the afterstart enrichment % lasts for
   byte aseBins[4]; //Afterstart enrichment temp axis
@@ -1180,6 +1194,38 @@ struct config10 {
   } __attribute__((__packed__)); //The 32 bit systems require all structs to be fully packed
 #endif
 
+struct cmpOperation{
+  uint8_t firstCompType : 3;
+  uint8_t secondCompType : 3;
+  uint8_t bitwise : 2;
+};
+
+/*
+Page 13 - Programmable outputs conditions.
+128 bytes long
+*/
+struct config13 {
+  uint8_t outputInverted;
+  uint8_t unused12_1;
+  uint8_t outputPin[8];
+  uint8_t outputDelay[8]; //0.1S
+  uint16_t firstDataIn[8];
+  uint16_t secondDataIn[8];
+  int16_t firstTarget[8];
+  int16_t secondTarget[8];
+  //89bytes
+  struct cmpOperation operation[8];
+
+  uint16_t candID[8]; //Actual CAN ID need 16bits, this is a placeholder
+
+  byte unused12_106_127[22];
+
+#if defined(CORE_AVR)
+  };
+#else
+  } __attribute__((__packed__)); //The 32 bit systems require all structs to be fully packed
+#endif
+
 extern byte pinInjector1; //Output pin injector 1
 extern byte pinInjector2; //Output pin injector 2
 extern byte pinInjector3; //Output pin injector 3
@@ -1270,22 +1316,25 @@ extern struct config4 configPage4;
 extern struct config6 configPage6;
 extern struct config9 configPage9;
 extern struct config10 configPage10;
+extern struct config13 configPage13;
 //extern byte cltCalibrationTable[CALIBRATION_TABLE_SIZE]; /**< An array containing the coolant sensor calibration values */
 //extern byte iatCalibrationTable[CALIBRATION_TABLE_SIZE]; /**< An array containing the inlet air temperature sensor calibration values */
-extern byte o2CalibrationTable[CALIBRATION_TABLE_SIZE]; /**< An array containing the O2 sensor calibration values */
+//extern byte o2CalibrationTable[CALIBRATION_TABLE_SIZE]; /**< An array containing the O2 sensor calibration values */
 
 extern uint16_t cltCalibration_bins[32];
 extern uint16_t cltCalibration_values[32];
 extern uint16_t iatCalibration_bins[32];
 extern uint16_t iatCalibration_values[32];
-extern struct table2D cltCalibrationTable_new; /**< A 32 bin array containing the coolant temperature sensor calibration values */
-extern struct table2D iatCalibrationTable_new; /**< A 32 bin array containing the inlet air temperature sensor calibration values */
-extern struct table2D o2CalibrationTable_new; /**< A 32 bin array containing the O2 sensor calibration values */
+extern uint16_t o2Calibration_bins[32];
+extern uint8_t  o2Calibration_values[32]; // Note 8-bit values
+extern struct table2D cltCalibrationTable; /**< A 32 bin array containing the coolant temperature sensor calibration values */
+extern struct table2D iatCalibrationTable; /**< A 32 bin array containing the inlet air temperature sensor calibration values */
+extern struct table2D o2CalibrationTable; /**< A 32 bin array containing the O2 sensor calibration values */
 
 static_assert(sizeof(struct config2) == 128, "configPage2 size is not 128");
 static_assert(sizeof(struct config4) == 128, "configPage4 size is not 128");
 static_assert(sizeof(struct config6) == 128, "configPage6 size is not 128");
 static_assert(sizeof(struct config9) == 192, "configPage9 size is not 192");
 static_assert(sizeof(struct config10) == 192, "configPage10 size is not 192");
-
+static_assert(sizeof(struct config13) == 128, "configPage13 size is not 128");
 #endif // GLOBALS_H
