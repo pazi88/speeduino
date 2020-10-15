@@ -48,7 +48,7 @@ unsigned long EMAPrunningValue; //As above but for EMAP
 unsigned int MAPcount; //Number of samples taken in the current MAP cycle
 uint32_t MAPcurRev; //Tracks which revolution we're sampling on
 bool auxIsEnabled;
-byte TPSlast; /**< The previous TPS reading */
+uint16_t TPSlast; /**< The previous TPS reading */
 unsigned long TPS_time; //The time the TPS sample was taken
 unsigned long TPSlast_time; //The time the previous TPS sample was taken
 byte MAPlast; /**< The previous MAP reading */

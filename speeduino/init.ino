@@ -278,6 +278,7 @@ void initialiseAll()
     BIT_CLEAR(currentStatus.engineProtectStatus, PROTECT_IO_ERROR); //Clear the I/O error bit. The bit will be set in initialiseADC() if there is problem in there.
     initialiseADC();
     initialiseProgrammableIO();
+    initialiseDBW();
 
     //Lookup the current MAP reading for barometric pressure
     instanteneousMAPReading();
@@ -1806,6 +1807,9 @@ void setPinMapping(byte boardID)
       pinLaunch = 51; //Launch control pin
       pinFlex = 2; // Flex sensor
       pinResetControl = 43; //Reset control output
+      pinTPS2 = A10;
+      pinPedal = A11;
+      pinPedal2 = A12;
       break;
 
     case 40:
@@ -2524,6 +2528,9 @@ void setPinMapping(byte boardID)
       pinMode(pinCLT, INPUT_ANALOG);
       pinMode(pinBat, INPUT_ANALOG);
       pinMode(pinBaro, INPUT_ANALOG);
+      pinMode(pinTPS2, INPUT_ANALOG);
+      pinMode(pinPedal, INPUT_ANALOG);
+      pinMode(pinPedal2, INPUT_ANALOG);
     #else
       pinMode(pinMAP, INPUT);
       pinMode(pinO2, INPUT);
@@ -2533,6 +2540,9 @@ void setPinMapping(byte boardID)
       pinMode(pinCLT, INPUT);
       pinMode(pinBat, INPUT);
       pinMode(pinBaro, INPUT);
+      pinMode(pinTPS2, INPUT);
+      pinMode(pinPedal, INPUT);
+      pinMode(pinPedal2, INPUT);
     #endif
   #endif
   pinMode(pinTrigger, INPUT);

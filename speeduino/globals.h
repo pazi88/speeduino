@@ -55,7 +55,7 @@
 
 //Select one for EEPROM,the default is EEPROM emulation on internal flash.
 //#define SRAM_AS_EEPROM /*Use 4K battery backed SRAM, requires a 3V continuous source (like battery) connected to Vbat pin */
-#define USE_SPI_EEPROM PB0 /*Use M25Qxx SPI flash */
+#define USE_SPI_EEPROM PE1 /*Use M25Qxx SPI flash */
 //#define FRAM_AS_EEPROM /*Use FRAM like FM25xxx, MB85RSxxx or any SPI compatible */
 
   #ifndef word
@@ -513,8 +513,8 @@ struct statuses {
   int16_t EMAP;
   int16_t EMAPADC;
   byte baro; //Barometric pressure is simply the inital MAP reading, taken before the engine is running. Alternatively, can be taken from an external sensor
-  byte TPS; /**< The current TPS reading (0% - 100%). Is the tpsADC value after the calibration is applied */
-  byte tpsADC; /**< 0-255 byte representation of the TPS. Downsampled from the original 10-bit reading, but before any calibration is applied */
+  int16_t TPS; /**< The current TPS reading (0.0% - 100.0%). Is the tpsADC value after the calibration is applied. Divide by 10 to get result*/
+  int16_t tpsADC; /**< 0-1023 byte representation of the TPS before any calibration is applied */
   byte tpsDOT; /**< TPS delta over time. Measures the % per second that the TPS is changing. Value is divided by 10 to be stored in a byte */
   byte mapDOT; /**< MAP delta over time. Measures the kpa per second that the MAP is changing. Value is divided by 10 to be stored in a byte */
   volatile int rpmDOT;
@@ -616,6 +616,10 @@ struct statuses {
   byte vvt2TargetAngle;
   byte vvt2Duty;
   byte outputsStatus;
+  uint16_t DBWduty;
+  uint16_t TPS2;
+  uint16_t Pedal_1;
+  uint16_t Pedal_2;
 };
 
 /**
@@ -695,8 +699,7 @@ struct config2 {
   byte flexFreqHigh; //Highest valid frequency reading from the flex sensor
 
   byte boostMaxDuty;
-  byte tpsMin;
-  byte tpsMax;
+  uint16_t tpsMin;
   int8_t mapMin; //Must be signed
   uint16_t mapMax;
   byte fpPrime; //Time (In seconds) that the fuel pump should be primed for on power up
@@ -763,7 +766,8 @@ struct config2 {
   uint16_t vssRatio5;
   uint16_t vssRatio6;
 
-  byte unused2_95[9];
+  byte unused2_95[7];
+  uint16_t tpsMax;
   byte primingDelay;
 
 #if defined(CORE_AVR)
@@ -1322,6 +1326,9 @@ extern byte pinOilPressure;
 extern byte pinWMIEmpty; // Water tank empty sensor
 extern byte pinWMIIndicator; // No water indicator bulb
 extern byte pinWMIEnabled; // ON-OFF ouput to relay/pump/solenoid 
+extern byte pinTPS2; //pin for second TPS sensor
+extern byte pinPedal; //pin for the pedal sensor
+extern byte pinPedal2; //pin for the second pedal sensor
 #ifdef USE_MC33810
   //If the MC33810 IC\s are in use, these are the chip select pins
   extern byte pinMC33810_1_CS;

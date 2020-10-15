@@ -29,10 +29,15 @@
     Timer1.setMode(4, TIMER_OUTPUT_COMPARE);
     Timer1.attachInterrupt(4, idleInterrupt);  //on first flash the configPage4.iacAlgorithm is invalid
 
-
+    /*
+    ***********************************************************************************************************
+    * DBW
+    */
+    Timer10.setMode(1, TIMER_OUTPUT_COMPARE_PWM1, PB8);  //DBW PWM output fixed to PB8/
     /*
     ***********************************************************************************************************
     * Timers
+
     */
     #if defined(ARDUINO_BLUEPILL_F103C8) || defined(ARDUINO_BLUEPILL_F103CB)
       Timer4.setOverflow(1000, MICROSEC_FORMAT);  // Set up period
