@@ -766,7 +766,10 @@ struct config2 {
   uint16_t vssRatio5;
   uint16_t vssRatio6;
 
-  byte unused2_95[7];
+  byte unused2_95[4];
+  byte DBWKP; //Byte 127
+  byte DBWKI; //Byte 128
+  byte DBWKD; //Byte 129
   uint16_t tpsMax;
   byte primingDelay;
 

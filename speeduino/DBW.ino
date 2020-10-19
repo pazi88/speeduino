@@ -6,12 +6,18 @@ this only works on STM32
 #include "maths.h"
 #include "src/PID_v1/PID_v1.h"
 
+integerPID DBWPID(&currentStatus.TPS, &currentStatus.DBWduty, &currentStatus.Pedal_1, configPage2.DBWKP, configPage2.DBWKI, configPage2.DBWKD, DIRECT);
+
 void initialiseDBW()
 {
   //DBW will use hardware PWM output on STM32 to prevent the high frequency PWM output taking too much CPU time
   Timer10.setOverflow(20000, HERTZ_FORMAT); //set the output to 20KHz to prevent the motor control being audible
   Timer10.setCaptureCompare(1, 0, RESOLUTION_12B_COMPARE_FORMAT); // Dutycycle: [0.. 4095]
   Timer10.resume();
+  DBWPID.SetOutputLimits(0, 4095);
+  DBWPID.SetTunings(configPage2.DBWKP, configPage2.DBWKI, configPage2.DBWKD);
+  DBWPID.SetSampleTime(66); //15Hz is 66,66ms
+  DBWPID.SetMode(AUTOMATIC); //Turn PID on
 
 }
 void DBWControl()
@@ -20,6 +26,10 @@ void DBWControl()
   currentStatus.Pedal_1 = analogRead(pinPedal);
   currentStatus.Pedal_2 = analogRead(pinPedal2);
   //just to test the PWM output. Duty = TPS value
-  currentStatus.DBWduty = currentStatus.tpsADC * 4;
-  Timer10.setCaptureCompare(1, currentStatus.DBWduty, RESOLUTION_12B_COMPARE_FORMAT); // Dutycycle: [0.. 4095]
+  //currentStatus.DBWduty = currentStatus.tps * 4;
+  bool PID_compute = DBWPID.Compute(false);
+  if(PID_compute == true)
+  {
+    Timer10.setCaptureCompare(1, currentStatus.DBWduty, RESOLUTION_12B_COMPARE_FORMAT); // Dutycycle: [0.. 4095]
+  }
 }
