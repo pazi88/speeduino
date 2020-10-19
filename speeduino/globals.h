@@ -513,7 +513,7 @@ struct statuses {
   int16_t EMAP;
   int16_t EMAPADC;
   byte baro; //Barometric pressure is simply the inital MAP reading, taken before the engine is running. Alternatively, can be taken from an external sensor
-  int16_t TPS; /**< The current TPS reading (0.0% - 100.0%). Is the tpsADC value after the calibration is applied. Divide by 10 to get result*/
+  long TPS; /**< The current TPS reading (0.0% - 100.0%). Is the tpsADC value after the calibration is applied. Divide by 10 to get result*/
   int16_t tpsADC; /**< 0-1023 byte representation of the TPS before any calibration is applied */
   byte tpsDOT; /**< TPS delta over time. Measures the % per second that the TPS is changing. Value is divided by 10 to be stored in a byte */
   byte mapDOT; /**< MAP delta over time. Measures the kpa per second that the MAP is changing. Value is divided by 10 to be stored in a byte */
@@ -616,10 +616,10 @@ struct statuses {
   byte vvt2TargetAngle;
   byte vvt2Duty;
   byte outputsStatus;
-  uint16_t DBWduty;
-  uint16_t TPS2;
-  uint16_t Pedal_1;
-  uint16_t Pedal_2;
+  long DBWduty;
+  long TPS2;
+  long Pedal_1;
+  long Pedal_2;
 };
 
 /**

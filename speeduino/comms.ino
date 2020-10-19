@@ -523,8 +523,8 @@ void updateFullStatus()
   fullStatus[21] = currentStatus.afrTarget;
   fullStatus[22] = currentStatus.tpsDOT; //TPS DOT
   fullStatus[23] = currentStatus.advance;
-  fullStatus[24] = lowByte(currentStatus.TPS); // TPS (0% to 100%)
-  fullStatus[25] = highByte(currentStatus.TPS); // TPS (0% to 100%)
+  fullStatus[24] = lowByte((uint16_t)currentStatus.TPS); // TPS (0% to 100%)
+  fullStatus[25] = highByte((uint16_t)currentStatus.TPS); // TPS (0% to 100%)
   //Need to split the int loopsPerSecond value into 2 bytes
   if(currentStatus.loopsPerSecond > 60000) { currentStatus.loopsPerSecond = 60000;}
   fullStatus[26] = lowByte(currentStatus.loopsPerSecond);
@@ -633,14 +633,14 @@ void updateFullStatus()
   fullStatus[116] = currentStatus.advance1; //advance 1 (%)
   fullStatus[117] = currentStatus.advance2; //advance 2 (%)
   fullStatus[118] = dataRate;
-  fullStatus[119] = lowByte(currentStatus.DBWduty);
-  fullStatus[120] = highByte(currentStatus.DBWduty);
-  fullStatus[121] = lowByte(currentStatus.TPS2);
-  fullStatus[122] = highByte(currentStatus.TPS2);
-  fullStatus[123] = lowByte(currentStatus.Pedal_1);
-  fullStatus[124] = highByte(currentStatus.Pedal_1);
-  fullStatus[125] = lowByte(currentStatus.Pedal_2);
-  fullStatus[126] = highByte(currentStatus.Pedal_2);
+  fullStatus[119] = lowByte((uint16_t)currentStatus.DBWduty);
+  fullStatus[120] = highByte((uint16_t)currentStatus.DBWduty);
+  fullStatus[121] = lowByte((uint16_t)currentStatus.TPS2);
+  fullStatus[122] = highByte((uint16_t)currentStatus.TPS2);
+  fullStatus[123] = lowByte((uint16_t)currentStatus.Pedal_1);
+  fullStatus[124] = highByte((uint16_t)currentStatus.Pedal_1);
+  fullStatus[125] = lowByte((uint16_t)currentStatus.Pedal_2);
+  fullStatus[126] = highByte((uint16_t)currentStatus.Pedal_2);
 }
 /*
 This function returns the current values of a fixed group of variables
