@@ -346,6 +346,33 @@ void TS_CommandButtonsHandler(int buttonCommand)
       }
       break;
 
+    //DBW related calibrations
+    case TS_CMD_PEDAL_MIN: 
+      if(currentStatus.RPM == 0)
+      {
+        configPage2.Pedal1_min = analogRead(pinPedal);
+        configPage2.Pedal2_min = analogRead(pinPedal2);
+        writeConfig(1); // Need to manually save the new config value as it will not trigger a burn in tunerStudio due to use of ControllerPriority
+      }
+      break;
+
+    case TS_CMD_PEDAL_MAX:
+      if(currentStatus.RPM == 0)
+      {
+        configPage2.Pedal1_max = analogRead(pinPedal);
+        configPage2.Pedal2_max = analogRead(pinPedal2);
+        writeConfig(1); // Need to manually save the new config value as it will not trigger a burn in tunerStudio due to use of ControllerPriority
+      }
+      break;
+
+    case TS_CMD_CAL_FLAP:
+      if(currentStatus.RPM == 0)
+      {
+        configPage2.DoDBWCal = true; //set the flag for DBW control to do the cal.
+        writeConfig(1); // Need to manually save the new config value as it will not trigger a burn in tunerStudio due to use of ControllerPriority
+      }
+      break;
+
     default:
       break;
   }

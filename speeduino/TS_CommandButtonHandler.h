@@ -65,4 +65,8 @@
 #define TS_CMD_VSS_RATIO5 39173
 #define TS_CMD_VSS_RATIO6 39174
 
+#define TS_CMD_PEDAL_MIN  34816 //0x88x00
+#define TS_CMD_PEDAL_MAX  34816
+#define TS_CMD_CAL_FLAP   34816
+
 void TS_CommandButtonsHandler(int);

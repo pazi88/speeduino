@@ -18,18 +18,49 @@ void initialiseDBW()
   DBWPID.SetTunings(configPage2.DBWKP, configPage2.DBWKI, configPage2.DBWKD);
   DBWPID.SetSampleTime(66); //15Hz is 66,66ms
   DBWPID.SetMode(AUTOMATIC); //Turn PID on
+  int CalTimer = 0;
+  configPage2.DoDBWCal = false; //disable calibration
 
 }
 void DBWControl()
 {
-  currentStatus.TPS2 = analogRead(pinTPS2);
-  currentStatus.Pedal_1 = analogRead(pinPedal);
-  currentStatus.Pedal_2 = analogRead(pinPedal2);
-  //just to test the PWM output. Duty = TPS value
-  //currentStatus.DBWduty = currentStatus.tps * 4;
-  bool PID_compute = DBWPID.Compute(false);
-  if(PID_compute == true)
+  if configPage2.DoDBWCal = false; //normal operation
   {
-    Timer10.setCaptureCompare(1, currentStatus.DBWduty, RESOLUTION_12B_COMPARE_FORMAT); // Dutycycle: [0.. 4095]
+    currentStatus.TPS2 = analogRead(pinTPS2);
+    currentStatus.Pedal_1 = analogRead(pinPedal);
+    currentStatus.Pedal_2 = analogRead(pinPedal2);
+    //just to test the PWM output. Duty = TPS value
+    //currentStatus.DBWduty = currentStatus.tps * 4;
+    bool PID_compute = DBWPID.Compute(false);
+    if(PID_compute == true)
+    {
+      Timer10.setCaptureCompare(1, currentStatus.DBWduty, RESOLUTION_12B_COMPARE_FORMAT); // Dutycycle: [0.. 4095]
+    }
+  }
+  else //calibration flag is set
+  {
+    if CalTimer < 10;
+    {
+      Timer10.setCaptureCompare(1, 0, RESOLUTION_12B_COMPARE_FORMAT); // Dutycycle: 0 (min value = fully closed)
+    }
+    else if CalTimer == 10;
+    {
+        // Read ADC values when throttle flap is fully closed and store those as min values
+        configPage2.TPS1_min = analogRead(pinTPS);
+        configPage2.TPS2_min = analogRead(pinTPS2);
+    }
+    else if CalTimer > 10;
+    {
+      Timer10.setCaptureCompare(1, 0, RESOLUTION_12B_COMPARE_FORMAT); // Dutycycle: 4096 (max value = fully open)
+    }
+    else if CalTimer == 20;
+    {
+        // Read ADC values when throttle flap is fully open and store those as max values
+        configPage2.TPS1_max = analogRead(pinTPS);
+        configPage2.TPS2_max = analogRead(pinTPS2);
+        configPage2.DoDBWCal = false; //calibration done
+        CalTimer = 0;
+    }
+    CalTimer++;
   }
 }
