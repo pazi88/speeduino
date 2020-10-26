@@ -175,6 +175,15 @@
 #define BIT_STATUS3_NSQUIRTS2     6
 #define BIT_STATUS3_NSQUIRTS3     7
 
+#define BIT_DBWSTATUS_CAL_ONGOING 0  //Calibration ongoing for the throttle flap
+#define BIT_DBWSTATUS_CAL_OK      1  //Calibration is done in some point
+#define BIT_DBWSTATUS_PEDAL_ERR   2
+#define BIT_DBWSTATUS_TPS_ERR     3
+#define BIT_DBWSTATUS_UNUSED5     4
+#define BIT_DBWSTATUS_UNUSED6     5
+#define BIT_DBWSTATUS_UNUSED7     6
+#define BIT_DBWSTATUS_UNUSED8     7
+
 #define VALID_MAP_MAX 1022 //The largest ADC value that is valid for the MAP sensor
 #define VALID_MAP_MIN 2 //The smallest ADC value that is valid for the MAP sensor
 
@@ -620,6 +629,7 @@ struct statuses {
   long TPS2;
   long Pedal_1;
   long Pedal_2;
+  volatile byte DBWstatus;
 };
 
 /**
@@ -766,10 +776,7 @@ struct config2 {
   uint16_t vssRatio5;
   uint16_t vssRatio6;
 
-  byte unused2_95[4];
-  byte DBWKP; //Byte 127
-  byte DBWKI; //Byte 128
-  byte DBWKD; //Byte 129
+  byte unused2_95[7];
   uint16_t tpsMax;
   byte primingDelay;
 
@@ -1003,21 +1010,15 @@ struct config9 {
 
   byte iacMaxSteps; // Step limit beyond which the stepper won't be driven. Should always be less than homing steps. Stored div 3 as per home steps.
 
-  byte unused10_155;
-  byte unused10_156;
-  byte unused10_157;
-  byte unused10_158;
-  byte unused10_159;
-  byte unused10_160;
-  byte unused10_161;
-  byte unused10_162;
-  byte unused10_163;
-  byte unused10_164;
-  byte unused10_165;
-  byte unused10_166;
-  byte unused10_167;
-  byte unused10_168;
-  byte unused10_169;
+  byte DBWKP;
+  byte DBWKI;
+  byte DBWKD;
+  uint16_t tps2Min;
+  uint16_t tps2Max;
+  uint16_t Pedal1Min;
+  uint16_t Pedal1Max;
+  uint16_t Pedal2Min;
+  uint16_t Pedal2Max;
   byte unused10_170;
   byte unused10_171;
   byte unused10_172;

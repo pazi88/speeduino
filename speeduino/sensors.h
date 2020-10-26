@@ -77,6 +77,9 @@ static inline void readMAP() __attribute__((always_inline));
 static inline void validateMAP();
 void initialiseADC();
 void readTPS(bool=true); //Allows the option to override the use of the filter
+void readTPS2();
+void readPedal1();
+void readPedal12();
 void readO2_2();
 void flexPulse();
 void vssPulse();
