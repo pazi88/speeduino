@@ -106,6 +106,12 @@ void command()
           TS_CommandButtonsHandler(cmdCombined);
           cmdPending = false;
         }
+        else if( (cmdCombined >= TS_CMD_PEDAL_MIN) && (cmdCombined <= TS_CMD_CAL_FLAP) )
+        {
+          //DBW Calibration commands
+          if (currentStatus.RPM == 0) { TS_CommandButtonsHandler(cmdCombined); }
+          cmdPending = false;
+        }
       }
       break;
 
