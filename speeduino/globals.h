@@ -636,11 +636,14 @@ struct statuses {
   byte vvt2TargetAngle;
   byte vvt2Duty;
   byte outputsStatus;
-  long DBWduty;
+  int16_t DBWduty;
   long TPS2;
-  long Pedal_1;
-  long Pedal_2;
+  long Pedal;
+  long Pedal2;
   volatile byte DBWstatus;
+  uint16_t tps2ADC;
+  uint16_t PedalADC;
+  uint16_t Pedal2ADC;
 };
 
 /**
@@ -1345,6 +1348,8 @@ extern byte pinWMIEnabled; // ON-OFF ouput to relay/pump/solenoid
 extern byte pinTPS2; //pin for second TPS sensor
 extern byte pinPedal; //pin for the pedal sensor
 extern byte pinPedal2; //pin for the second pedal sensor
+extern byte pinDBWdir; //H-bridge direction output for the DBW
+extern byte pinDBWdir2; //Inverted H-bridge direction output for the DBW
 #ifdef USE_MC33810
   //If the MC33810 IC\s are in use, these are the chip select pins
   extern byte pinMC33810_1_CS;

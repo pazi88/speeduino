@@ -402,83 +402,98 @@ void readTPS(bool useFilter)
 
 void readTPS2()
 {
-  uint16_t tempTPS2 = analogRead(pinTPS2); //Get the current raw TPS ADC value and map it into a byte
+  TPS2last = currentStatus.TPS2;
+  TPS2last_time = TPS2_time;
+  uint16_t tempTPS2 = analogRead(pinTPS2); //Get the current raw TPS2 ADC value
+  currentStatus.tps2ADC = ADC_FILTER(tempTPS2, configPage4.ADCFILTER_TPS, currentStatus.tps2ADC);
+  uint16_t tempADC = currentStatus.tps2ADC;
 
   if(configPage9.tps2Max > configPage9.tps2Min)
   {
     //Check that the ADC values fall within the min and max ranges (Should always be the case, but noise can cause these to fluctuate outside the defined range).
-    if (tempTPS2 < configPage9.tps2Min) { tempTPS2 = configPage9.tps2Min; }
-    else if(tempTPS2 > configPage9.tps2Max) { tempTPS2 = configPage9.tps2Max; }
-    currentStatus.TPS2 = map(tempTPS2, configPage9.tps2Min, configPage9.tps2Max, 0, 1000); //Take the raw TPS ADC value and convert it into a TPS% based on the calibrated values
+    if (currentStatus.tps2ADC < configPage9.tps2Min) { tempADC = configPage9.tps2Min; }
+    else if(currentStatus.tps2ADC > configPage9.tps2Max) { tempADC = configPage9.tps2Max; }
+    currentStatus.TPS2 = map(tempADC, configPage9.tps2Min, configPage9.tps2Max, 0, 1000); //Take the raw TPS ADC value and convert it into a TPS% based on the calibrated values
   }
   else
   {
     //This case occurs when the TPS +5v and gnd are wired backwards, but the user wishes to retain this configuration.
     //In such a case, tpsMin will be greater then tpsMax and hence checks and mapping needs to be reversed
 
-    tempTPS2 = 1023 - tempTPS2; //Reverse the ADC values
+    tempADC = 1023 - currentStatus.tps2ADC; //Reverse the ADC values
     uint16_t tempTPS2Max = 1023 - configPage9.tps2Max;
     uint16_t tempTPS2Min = 1023 - configPage9.tps2Min;
 
     //All checks below are reversed from the standard case above
-    if (tempTPS2 > tempTPS2Max) { tempTPS2 = tempTPS2Max; }
-    else if(tempTPS2 < tempTPS2Min) { tempTPS2 = tempTPS2Min; }
-    currentStatus.TPS2 = map(tempTPS2, tempTPS2Min, tempTPS2Max, 0, 1000);
+    if (tempADC > tempTPS2Max) { tempADC = tempTPS2Max; }
+    else if(tempADC < tempTPS2Min) { tempADC = tempTPS2Min; }
+    currentStatus.TPS2 = map(tempADC, tempTPS2Min, tempTPS2Max, 0, 1000);
   }
+  TPS2_time = micros();
 }
 
 void readPedal1()
 {
-  uint16_t tempPedal1 = analogRead(pinPedal); //Get the current raw TPS ADC value and map it into a byte
+  Pedallast = currentStatus.Pedal;
+  Pedallast_time = Pedal_time;
+  uint16_t tempPedal = analogRead(pinPedal); //Get the current raw Pedal ADC value
+  currentStatus.PedalADC = ADC_FILTER(tempPedal, configPage4.ADCFILTER_TPS, currentStatus.PedalADC);
+  uint16_t tempADC = currentStatus.PedalADC;
 
   if(configPage9.Pedal1Max > configPage9.Pedal1Min)
   {
     //Check that the ADC values fall within the min and max ranges (Should always be the case, but noise can cause these to fluctuate outside the defined range).
-    if (tempPedal1 < configPage9.Pedal1Min) { tempPedal1 = configPage9.Pedal1Min; }
-    else if(tempPedal1 > configPage9.Pedal1Max) { tempPedal1 = configPage9.Pedal1Max; }
-    currentStatus.Pedal_1 = map(tempPedal1, configPage9.Pedal1Min, configPage9.Pedal1Max, 0, 1000); //Take the raw TPS ADC value and convert it into a TPS% based on the calibrated values
+    if (currentStatus.PedalADC < configPage9.Pedal1Min) { tempADC = configPage9.Pedal1Min; }
+    else if(currentStatus.PedalADC > configPage9.Pedal1Max) { tempADC = configPage9.Pedal1Max; }
+    currentStatus.Pedal = map(tempADC, configPage9.Pedal1Min, configPage9.Pedal1Max, 0, 1000); //Take the raw TPS ADC value and convert it into a TPS% based on the calibrated values
   }
   else
   {
     //This case occurs when the TPS +5v and gnd are wired backwards, but the user wishes to retain this configuration.
     //In such a case, tpsMin will be greater then tpsMax and hence checks and mapping needs to be reversed
 
-    tempPedal1 = 1023 - tempPedal1; //Reverse the ADC values
+    tempADC = 1023 - currentStatus.PedalADC; //Reverse the ADC values
     uint16_t tempPedal1Max = 1023 - configPage9.Pedal1Max;
     uint16_t tempPedal1Min = 1023 - configPage9.Pedal1Min;
 
     //All checks below are reversed from the standard case above
-    if (tempPedal1 > tempPedal1Max) { tempPedal1 = tempPedal1Max; }
-    else if(tempPedal1 < tempPedal1Min) { tempPedal1 = tempPedal1Min; }
-    currentStatus.Pedal_1 = map(tempPedal1, tempPedal1Min, tempPedal1Max, 0, 1000);
+    if (tempADC > tempPedal1Max) { tempADC = tempPedal1Max; }
+    else if(tempADC < tempPedal1Min) { tempADC = tempPedal1Min; }
+    currentStatus.Pedal = map(tempADC, tempPedal1Min, tempPedal1Max, 0, 1000);
   }
+  Pedal_time = micros();
 }
 
 void readPedal2()
 {
-  uint16_t tempPedal2 = analogRead(pinPedal2); //Get the current raw TPS ADC value and map it into a byte
+  Pedal2last = currentStatus.Pedal2;
+  Pedal2last_time = Pedal2_time;
+  uint16_t tempPedal2 = analogRead(pinPedal2); //Get the current raw Pedal2 ADC value
+  currentStatus.Pedal2ADC = ADC_FILTER(tempPedal2, configPage4.ADCFILTER_TPS, currentStatus.Pedal2ADC);
+  uint16_t tempADC = currentStatus.Pedal2ADC;
 
   if(configPage9.Pedal2Max > configPage9.Pedal2Min)
   {
     //Check that the ADC values fall within the min and max ranges (Should always be the case, but noise can cause these to fluctuate outside the defined range).
-    if (tempPedal2 < configPage9.Pedal2Min) { tempPedal2 = configPage9.Pedal2Min; }
-    else if(tempPedal2 > configPage9.Pedal2Max) { tempPedal2 = configPage9.Pedal2Max; }
-    currentStatus.Pedal_2 = map(tempPedal2, configPage9.Pedal2Min, configPage9.Pedal2Max, 0, 1000); //Take the raw TPS ADC value and convert it into a TPS% based on the calibrated values
+    if (currentStatus.Pedal2ADC < configPage9.Pedal2Min) { tempADC = configPage9.Pedal2Min; }
+    else if(currentStatus.Pedal2ADC > configPage9.Pedal2Max) { tempADC = configPage9.Pedal2Max; }
+    currentStatus.Pedal2 = map(tempADC, configPage9.Pedal2Min, configPage9.Pedal2Max, 0, 1000); //Take the raw TPS ADC value and convert it into a TPS% based on the calibrated values
   }
   else
   {
     //This case occurs when the TPS +5v and gnd are wired backwards, but the user wishes to retain this configuration.
     //In such a case, tpsMin will be greater then tpsMax and hence checks and mapping needs to be reversed
 
-    tempPedal2 = 1023 - tempPedal2; //Reverse the ADC values
+    tempADC = 1023 - currentStatus.Pedal2ADC; //Reverse the ADC values
     uint16_t tempPedal2Max = 1023 - configPage9.Pedal2Max;
     uint16_t tempPedal2Min = 1023 - configPage9.Pedal2Min;
 
     //All checks below are reversed from the standard case above
-    if (tempPedal2 > tempPedal2Max) { tempPedal2 = tempPedal2Max; }
-    else if(tempPedal2 < tempPedal2Min) { tempPedal2 = tempPedal2Min; }
-    currentStatus.Pedal_2 = map(tempPedal2, tempPedal2Min, tempPedal2Max, 0, 1000);
+    if (tempADC > tempPedal2Max) { tempADC = tempPedal2Max; }
+    else if(tempADC < tempPedal2Min) { tempADC = tempPedal2Min; }
+    currentStatus.Pedal2 = map(tempADC, tempPedal2Min, tempPedal2Max, 0, 1000);
   }
+  Pedal2_time = micros();
 }
 
 void readCLT(bool useFilter)

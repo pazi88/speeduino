@@ -1638,6 +1638,8 @@ void setPinMapping(byte boardID)
       pinTPS2 = A10;
       pinPedal = A11;
       pinPedal2 = A12;
+      pinDBWdir = 26;
+      pinDBWdir2 = 28;
       break;
 
     case 40:
@@ -2271,6 +2273,8 @@ void setPinMapping(byte boardID)
   pinMode(pinBoost, OUTPUT);
   pinMode(pinVVT_1, OUTPUT);
   pinMode(pinVVT_2, OUTPUT);
+  pinMode(pinDBWdir, OUTPUT);
+  pinMode(pinDBWdir2, OUTPUT);
 
   //This is a legacy mode option to revert the MAP reading behaviour to match what was in place prior to the 201905 firmware
   if(configPage2.legacyMAP > 0) { digitalWrite(pinMAP, HIGH); }

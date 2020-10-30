@@ -51,6 +51,15 @@ bool auxIsEnabled;
 uint16_t TPSlast; /**< The previous TPS reading */
 unsigned long TPS_time; //The time the TPS sample was taken
 unsigned long TPSlast_time; //The time the previous TPS sample was taken
+uint16_t TPS2last; /**< The previous TPS2 reading */
+unsigned long TPS2_time; //The time the TPS2 sample was taken
+unsigned long TPS2last_time; //The time the previous TPS2 sample was taken
+uint16_t Pedallast; /**< The previous Pedal reading */
+unsigned long Pedal_time; //The time the Pedal sample was taken
+unsigned long Pedallast_time; //The time the previous Pedal sample was taken
+uint16_t Pedal2last; /**< The previous Pedal2 reading */
+unsigned long Pedal2_time; //The time the Pedal2 sample was taken
+unsigned long Pedal2last_time; //The time the previous Pedal2 sample was taken
 byte MAPlast; /**< The previous MAP reading */
 unsigned long MAP_time; //The time the MAP sample was taken
 unsigned long MAPlast_time; //The time the previous MAP sample was taken
@@ -79,7 +88,7 @@ void initialiseADC();
 void readTPS(bool=true); //Allows the option to override the use of the filter
 void readTPS2();
 void readPedal1();
-void readPedal12();
+void readPedal2();
 void readO2_2();
 void flexPulse();
 void vssPulse();

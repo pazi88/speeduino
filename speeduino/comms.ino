@@ -639,14 +639,14 @@ void updateFullStatus()
   fullStatus[116] = currentStatus.advance1; //advance 1 (%)
   fullStatus[117] = currentStatus.advance2; //advance 2 (%)
   fullStatus[118] = 0; //Currently unused
-  fullStatus[119] = lowByte((uint16_t)currentStatus.DBWduty);
-  fullStatus[120] = highByte((uint16_t)currentStatus.DBWduty);
+  fullStatus[119] = lowByte(currentStatus.DBWduty);
+  fullStatus[120] = highByte(currentStatus.DBWduty);
   fullStatus[121] = lowByte((uint16_t)currentStatus.TPS2);
   fullStatus[122] = highByte((uint16_t)currentStatus.TPS2);
-  fullStatus[123] = lowByte((uint16_t)currentStatus.Pedal_1);
-  fullStatus[124] = highByte((uint16_t)currentStatus.Pedal_1);
-  fullStatus[125] = lowByte((uint16_t)currentStatus.Pedal_2);
-  fullStatus[126] = highByte((uint16_t)currentStatus.Pedal_2);
+  fullStatus[123] = lowByte((uint16_t)currentStatus.Pedal);
+  fullStatus[124] = highByte((uint16_t)currentStatus.Pedal);
+  fullStatus[125] = lowByte((uint16_t)currentStatus.Pedal2);
+  fullStatus[126] = highByte((uint16_t)currentStatus.Pedal2);
 }
 /*
 This function returns the current values of a fixed group of variables

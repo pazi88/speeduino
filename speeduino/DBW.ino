@@ -7,17 +7,22 @@ this only works on STM32
 #include "sensors.h"
 #include "src/PID_v1/PID_v1.h"
 
-integerPID DBWPID(&currentStatus.TPS, &currentStatus.DBWduty, &currentStatus.Pedal_1, configPage9.DBWKP, configPage9.DBWKI, configPage9.DBWKD, DIRECT);
+integerPID DBWPID(&currentStatus.TPS, &DBWPidDuty, &currentStatus.Pedal, configPage9.DBWKP, configPage9.DBWKI, configPage9.DBWKD, DIRECT);
 
 void initialiseDBW()
 {
+  DBWdir_pin_port = portOutputRegister(digitalPinToPort(pinDBWdir));
+  DBWdir_pin_mask = digitalPinToBitMask(pinDBWdir);
+  DBWdir2_pin_port = portOutputRegister(digitalPinToPort(pinDBWdir2));
+  DBWdir2_pin_mask = digitalPinToBitMask(pinDBWdir2);
+
   //DBW will use hardware PWM output on STM32 to prevent the high frequency PWM output taking too much CPU time
   Timer10.setOverflow(20000, HERTZ_FORMAT); //set the output to 20KHz to prevent the motor control being audible
   Timer10.setCaptureCompare(1, 0, RESOLUTION_12B_COMPARE_FORMAT); // Dutycycle: [0.. 4095]
   Timer10.resume();
-  DBWPID.SetOutputLimits(0, 4095);
+  DBWPID.SetOutputLimits(0, 8190); //PID works with duty values from 0 to 8190. 0-4095 is backwards direction, 4096 - 8190 is forward direction
   DBWPID.SetTunings(configPage9.DBWKP, configPage9.DBWKI, configPage9.DBWKD);
-  DBWPID.SetSampleTime(66); //15Hz is 66,66ms
+  DBWPID.SetSampleTime(33); //30Hz is 33,33ms
   DBWPID.SetMode(AUTOMATIC); //Turn PID on
   int CalTimer = 0;
   BIT_CLEAR(currentStatus.DBWstatus, BIT_DBWSTATUS_CAL_ONGOING); //disable calibration
@@ -27,14 +32,45 @@ void DBWControl()
 {
   if ( BIT_CHECK(currentStatus.DBWstatus, BIT_DBWSTATUS_CAL_ONGOING) == false ) //normal operation
   {
-    readTPS(false);
+    readTPS();
     readTPS2();
     readPedal1();
     readPedal2();
     bool PID_compute = DBWPID.Compute(false);
     if(PID_compute == true)
     {
-      Timer10.setCaptureCompare(1, currentStatus.DBWduty, RESOLUTION_12B_COMPARE_FORMAT); // Dutycycle: [0.. 4095]
+      currentStatus.DBWduty = DBWPidDuty - 4095; //convert the duty from PID algorith to -4095 to 4095.
+      if ( DBWPidDuty >= 4095 )  // Open the DBW
+      {
+        if (configPage9.DBWdir == 0)
+        {
+          //Normal direction
+          *idle_pin_port |= (idle_pin_mask);  // Switch 1st direction pin to high
+          *idle2_pin_port &= ~(idle2_pin_mask);  // Switch 2nd direction pin to low
+        }
+        else
+        {
+          //Reversed direction
+          *idle_pin_port &= ~(idle_pin_mask);  // Switch 1st direction pin to high
+          *idle2_pin_port |= (idle2_pin_mask);  // Switch 2nd direction pin to low
+        }
+      }
+      else
+      {
+        if (configPage6.iacPWMdir == 0)
+        {
+          //Normal direction
+          *idle_pin_port &= ~(idle_pin_mask);  // Switch 1st direction pin to high
+          *idle2_pin_port |= (idle2_pin_mask);  // Switch 2nd direction pin to low
+        }
+        else
+        {
+          //Reversed direction
+          *idle_pin_port |= (idle_pin_mask);  // Switch 1st direction pin to high
+          *idle2_pin_port &= ~(idle2_pin_mask);  // Switch 2nd direction pin to low
+        }
+      }
+      Timer10.setCaptureCompare(1, abs(currentStatus.DBWduty), RESOLUTION_12B_COMPARE_FORMAT); // Dutycycle for the DBW PWM output: [0.. 4095]
     }
   }
   else //calibration flag is set
