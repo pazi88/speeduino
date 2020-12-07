@@ -789,7 +789,13 @@ struct config2 {
   byte iacTPSlimit;
   byte iacRPMlimitHysteresis;
 
-  byte unused2_95[5];
+  byte enableBMWCluster : 1;
+  byte enableVAGCluster : 1;
+  byte enableCluster1 : 1;
+  byte enableCluster2 : 1;
+  byte unusedClusterBits : 4;
+
+  byte unused2_95[4];
 
 #if defined(CORE_AVR)
   };

@@ -250,6 +250,15 @@ void loop()
       BIT_CLEAR(TIMER_mask, BIT_TIMER_10HZ);
       updateFullStatus();
       checkProgrammableIO();
+      #if defined(CORE_TEENSY35) || defined(ARDUINO_ARCH_STM32)
+      if (configPage2.enableBMWCluster = true)
+      {
+        sendGaugeMessage(0x545);
+        Can0.write(outMsg);
+        sendGaugeMessage(0x329);
+        Can0.write(outMsg);
+      }
+      #endif
     }
     if(BIT_CHECK(LOOP_TIMER, BIT_TIMER_30HZ)) //30 hertz
     {
@@ -263,6 +272,21 @@ void loop()
       //FOR TEST PURPOSES ONLY!!!
       //if(vvt2_pwm_value < vvt_pwm_max_count) { vvt2_pwm_value++; }
       //else { vvt2_pwm_value = 1; }
+      #if defined(CORE_TEENSY35) || defined(ARDUINO_ARCH_STM32)
+      if (configPage2.enableBMWCluster = true)
+      {
+        sendGaugeMessage(0x316);
+        Can0.write(outMsg);
+      }
+
+      if (configPage2.enableVAGCluster = true)
+      {
+        sendGaugeMessage(0x280);
+        Can0.write(outMsg);
+        sendGaugeMessage(0x5A0);
+        Can0.write(outMsg);
+      }
+      #endif
     }
     if (BIT_CHECK(LOOP_TIMER, BIT_TIMER_4HZ))
     {
