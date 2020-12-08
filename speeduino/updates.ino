@@ -429,6 +429,8 @@ void doUpdates()
 
   if(EEPROM.read(EEPROM_DATA_VERSION) == 15)
   {
+    configPage2.canBMWCluster = 0;
+    configPage2.canVAGCluster = 0;
 
     writeAllConfig();
     //EEPROM.write(EEPROM_DATA_VERSION, 16);

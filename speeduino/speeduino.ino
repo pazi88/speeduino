@@ -250,8 +250,8 @@ void loop()
       BIT_CLEAR(TIMER_mask, BIT_TIMER_10HZ);
       updateFullStatus();
       checkProgrammableIO();
-      #if defined(CORE_TEENSY35) || defined(ARDUINO_ARCH_STM32)
-      if (configPage2.enableBMWCluster = true)
+      #if defined(NATIVE_CAN_AVAILABLE)
+      if (configPage2.canBMWCluster == true)
       {
         sendGaugeMessage(0x545);
         Can0.write(outMsg);
@@ -272,14 +272,14 @@ void loop()
       //FOR TEST PURPOSES ONLY!!!
       //if(vvt2_pwm_value < vvt_pwm_max_count) { vvt2_pwm_value++; }
       //else { vvt2_pwm_value = 1; }
-      #if defined(CORE_TEENSY35) || defined(ARDUINO_ARCH_STM32)
-      if (configPage2.enableBMWCluster = true)
+      #if defined(NATIVE_CAN_AVAILABLE)
+      if (configPage2.canBMWCluster == true)
       {
         sendGaugeMessage(0x316);
         Can0.write(outMsg);
       }
 
-      if (configPage2.enableVAGCluster = true)
+      if (configPage2.canVAGCluster == true)
       {
         sendGaugeMessage(0x280);
         Can0.write(outMsg);

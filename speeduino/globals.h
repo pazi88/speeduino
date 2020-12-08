@@ -789,8 +789,8 @@ struct config2 {
   byte iacTPSlimit;
   byte iacRPMlimitHysteresis;
 
-  byte enableBMWCluster : 1;
-  byte enableVAGCluster : 1;
+  byte canBMWCluster : 1;
+  byte canVAGCluster : 1;
   byte enableCluster1 : 1;
   byte enableCluster2 : 1;
   byte unusedClusterBits : 4;

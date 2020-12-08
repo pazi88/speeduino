@@ -738,7 +738,7 @@ void sendGaugeMessage(uint16_t gaugeMessageID)
       uint8_t temp_TPS;
       int16_t temp_CLT;
       temp_TPS = map(currentStatus.TPS, 0, 100, 0, 254);//TPS value conversion (from 0x00 to 0xFE)
-      temp_CLT = (((currentStatus.coolant - CALIBRATION_TEMPERATURE_OFFSET) + 48,373)*4/3); //CLT conversion
+      temp_CLT = (((currentStatus.coolant - CALIBRATION_TEMPERATURE_OFFSET) + 48)*4/3); //CLT conversion (actual value to add is 48.373, but close enough)
       if (temp_CLT > 255) { temp_CLT = 255; } //CLT conversion can yield to higher values than what fits to byte, so limit the maximum value to 255.
 
       outMsg.id = gaugeMessageID;
