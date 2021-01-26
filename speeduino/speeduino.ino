@@ -250,15 +250,6 @@ void loop()
       BIT_CLEAR(TIMER_mask, BIT_TIMER_10HZ);
       updateFullStatus();
       checkProgrammableIO();
-      #if defined(NATIVE_CAN_AVAILABLE)
-      if (configPage2.canBMWCluster == true)
-      {
-        sendGaugeMessage(0x545);
-        Can0.write(outMsg);
-        sendGaugeMessage(0x329);
-        Can0.write(outMsg);
-      }
-      #endif
     }
     if(BIT_CHECK(LOOP_TIMER, BIT_TIMER_30HZ)) //30 hertz
     {
@@ -276,6 +267,10 @@ void loop()
       if (configPage2.canBMWCluster == true)
       {
         sendGaugeMessage(0x316);
+        Can0.write(outMsg);
+        sendGaugeMessage(0x329);
+        Can0.write(outMsg);
+        sendGaugeMessage(0x545);
         Can0.write(outMsg);
       }
 
