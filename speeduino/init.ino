@@ -19,7 +19,7 @@
 #include EEPROM_LIB_H
 #ifdef SD_LOGGING
   #include "SD_logger.h"
-  #include "rtc.h"
+  #include "rtc_common.h"
 #endif
 
 
@@ -1972,11 +1972,53 @@ void setPinMapping(byte boardID)
       break;
     #endif
 
+    #if defined(CORE_TEENSY35)
+    case 53:
+      //Pin mappings for the Juice Box (ignition only board)
+      pinInjector1 = 2; //Output pin injector 1 is on - NOT USED
+      pinInjector2 = 56; //Output pin injector 2 is on - NOT USED
+      pinInjector3 = 6; //Output pin injector 3 is on - NOT USED
+      pinInjector4 = 50; //Output pin injector 4 is on - NOT USED
+      pinCoil1 = 29; //Pin for coil 1
+      pinCoil2 = 30; //Pin for coil 2
+      pinCoil3 = 31; //Pin for coil 3
+      pinCoil4 = 32; //Pin for coil 4
+      pinTrigger = 37; //The CAS pin
+      pinTrigger2 = 38; //The Cam Sensor pin - NOT USED
+      pinTPS = A2; //TPS input pin
+      pinMAP = A7; //MAP sensor pin
+      pinIAT = A1; //IAT sensor pin
+      pinCLT = A5; //CLT sensor pin
+      pinO2 = A0; //O2 sensor pin
+      pinO2_2 = A21; //O2 sensor pin (second sensor) - NOT USED
+      pinBat = A6; //Battery reference voltage pin
+      pinTachOut = 28; //Tacho output pin
+      pinIdle1 = 5; //Single wire idle control - NOT USED
+      pinBoost = 11; //Boost control - NOT USED
+      pinFuelPump = 24; //Fuel pump output
+      pinStepperDir = 3; //Direction pin for DRV8825 driver - NOT USED
+      pinStepperStep = 4; //Step pin for DRV8825 driver - NOT USED
+      pinStepperEnable = 6; //Enable pin for DRV8825 driver - NOT USED
+      pinLaunch = 26; //Can be overwritten below
+      pinFan = 25; //Pin for the fan output
+      pinSpareHOut1 = 26; // high current output spare1
+      pinSpareHOut2 = 27; // high current output spare2
+      pinSpareLOut1 = 55; //low current output spare1 - NOT USED
+      break;
+    #endif
+
     case 55:
       #if defined(CORE_TEENSY)
       //Pin mappings for the DropBear
       injectorOutputControl = OUTPUT_CONTROL_MC33810;
       ignitionOutputControl = OUTPUT_CONTROL_MC33810;
+
+      //The injector pins below are not used directly as the control is via SPI through the MC33810s, however the pin numbers are set to be the SPI pins (SCLK, MOSI, MISO and CS) so that nothing else will set them as inputs
+      pinInjector1 = 13; //SCLK
+      pinInjector2 = 11; //MOSI
+      pinInjector3 = 12; //MISO
+      pinInjector4 = 10; //CS for MC33810 1
+      pinInjector5 = 9; //CS for MC33810 2
 
       pinTrigger = 19; //The CAS pin
       pinTrigger2 = 18; //The Cam Sensor pin
@@ -2347,25 +2389,25 @@ void setPinMapping(byte boardID)
 
   //Setup any devices that are using selectable pins
 
-  if ( (configPage6.launchPin != 0) && (configPage6.launchPin < BOARD_NR_GPIO_PINS) ) { pinLaunch = pinTranslate(configPage6.launchPin); }
-  if ( (configPage4.ignBypassPin != 0) && (configPage4.ignBypassPin < BOARD_NR_GPIO_PINS) ) { pinIgnBypass = pinTranslate(configPage4.ignBypassPin); }
-  if ( (configPage2.tachoPin != 0) && (configPage2.tachoPin < BOARD_NR_GPIO_PINS) ) { pinTachOut = pinTranslate(configPage2.tachoPin); }
-  if ( (configPage4.fuelPumpPin != 0) && (configPage4.fuelPumpPin < BOARD_NR_GPIO_PINS) ) { pinFuelPump = pinTranslate(configPage4.fuelPumpPin); }
-  if ( (configPage6.fanPin != 0) && (configPage6.fanPin < BOARD_NR_GPIO_PINS) ) { pinFan = pinTranslate(configPage6.fanPin); }
-  if ( (configPage6.boostPin != 0) && (configPage6.boostPin < BOARD_NR_GPIO_PINS) ) { pinBoost = pinTranslate(configPage6.boostPin); }
-  if ( (configPage6.vvt1Pin != 0) && (configPage6.vvt1Pin < BOARD_NR_GPIO_PINS) ) { pinVVT_1 = pinTranslate(configPage6.vvt1Pin); }
-  if ( (configPage6.useExtBaro != 0) && (configPage6.baroPin < BOARD_NR_GPIO_PINS) ) { pinBaro = configPage6.baroPin + A0; }
-  if ( (configPage6.useEMAP != 0) && (configPage10.EMAPPin < BOARD_NR_GPIO_PINS) ) { pinEMAP = configPage10.EMAPPin + A0; }
-  if ( (configPage10.fuel2InputPin != 0) && (configPage10.fuel2InputPin < BOARD_NR_GPIO_PINS) ) { pinFuel2Input = pinTranslate(configPage10.fuel2InputPin); }
-  if ( (configPage10.spark2InputPin != 0) && (configPage10.spark2InputPin < BOARD_NR_GPIO_PINS) ) { pinSpark2Input = pinTranslate(configPage10.spark2InputPin); }
-  if ( (configPage2.vssPin != 0) && (configPage2.vssPin < BOARD_NR_GPIO_PINS) ) { pinVSS = pinTranslate(configPage2.vssPin); }
-  if ( (configPage10.fuelPressurePin != 0) && (configPage10.fuelPressurePin < BOARD_NR_GPIO_PINS) ) { pinFuelPressure = configPage10.fuelPressurePin + A0; }
-  if ( (configPage10.oilPressurePin != 0) && (configPage10.oilPressurePin < BOARD_NR_GPIO_PINS) ) { pinOilPressure = configPage10.oilPressurePin + A0; }
+  if ( (configPage6.launchPin != 0) && (configPage6.launchPin < BOARD_MAX_IO_PINS) ) { pinLaunch = pinTranslate(configPage6.launchPin); }
+  if ( (configPage4.ignBypassPin != 0) && (configPage4.ignBypassPin < BOARD_MAX_IO_PINS) ) { pinIgnBypass = pinTranslate(configPage4.ignBypassPin); }
+  if ( (configPage2.tachoPin != 0) && (configPage2.tachoPin < BOARD_MAX_IO_PINS) ) { pinTachOut = pinTranslate(configPage2.tachoPin); }
+  if ( (configPage4.fuelPumpPin != 0) && (configPage4.fuelPumpPin < BOARD_MAX_IO_PINS) ) { pinFuelPump = pinTranslate(configPage4.fuelPumpPin); }
+  if ( (configPage6.fanPin != 0) && (configPage6.fanPin < BOARD_MAX_IO_PINS) ) { pinFan = pinTranslate(configPage6.fanPin); }
+  if ( (configPage6.boostPin != 0) && (configPage6.boostPin < BOARD_MAX_IO_PINS) ) { pinBoost = pinTranslate(configPage6.boostPin); }
+  if ( (configPage6.vvt1Pin != 0) && (configPage6.vvt1Pin < BOARD_MAX_IO_PINS) ) { pinVVT_1 = pinTranslate(configPage6.vvt1Pin); }
+  if ( (configPage6.useExtBaro != 0) && (configPage6.baroPin < BOARD_MAX_IO_PINS) ) { pinBaro = configPage6.baroPin + A0; }
+  if ( (configPage6.useEMAP != 0) && (configPage10.EMAPPin < BOARD_MAX_IO_PINS) ) { pinEMAP = configPage10.EMAPPin + A0; }
+  if ( (configPage10.fuel2InputPin != 0) && (configPage10.fuel2InputPin < BOARD_MAX_IO_PINS) ) { pinFuel2Input = pinTranslate(configPage10.fuel2InputPin); }
+  if ( (configPage10.spark2InputPin != 0) && (configPage10.spark2InputPin < BOARD_MAX_IO_PINS) ) { pinSpark2Input = pinTranslate(configPage10.spark2InputPin); }
+  if ( (configPage2.vssPin != 0) && (configPage2.vssPin < BOARD_MAX_IO_PINS) ) { pinVSS = pinTranslate(configPage2.vssPin); }
+  if ( (configPage10.fuelPressurePin != 0) && (configPage10.fuelPressurePin < BOARD_MAX_IO_PINS) ) { pinFuelPressure = configPage10.fuelPressurePin + A0; }
+  if ( (configPage10.oilPressurePin != 0) && (configPage10.oilPressurePin < BOARD_MAX_IO_PINS) ) { pinOilPressure = configPage10.oilPressurePin + A0; }
   
-  if ( (configPage10.wmiEmptyPin != 0) && (configPage10.wmiEmptyPin < BOARD_NR_GPIO_PINS) ) { pinWMIEmpty = pinTranslate(configPage10.wmiEmptyPin); }
-  if ( (configPage10.wmiIndicatorPin != 0) && (configPage10.wmiIndicatorPin < BOARD_NR_GPIO_PINS) ) { pinWMIIndicator = pinTranslate(configPage10.wmiIndicatorPin); }
-  if ( (configPage10.wmiEnabledPin != 0) && (configPage10.wmiEnabledPin < BOARD_NR_GPIO_PINS) ) { pinWMIEnabled = pinTranslate(configPage10.wmiEnabledPin); }
-  if ( (configPage10.vvt2Pin != 0) && (configPage10.vvt2Pin < BOARD_NR_GPIO_PINS) ) { pinVVT_2 = pinTranslate(configPage10.vvt2Pin); }
+  if ( (configPage10.wmiEmptyPin != 0) && (configPage10.wmiEmptyPin < BOARD_MAX_IO_PINS) ) { pinWMIEmpty = pinTranslate(configPage10.wmiEmptyPin); }
+  if ( (configPage10.wmiIndicatorPin != 0) && (configPage10.wmiIndicatorPin < BOARD_MAX_IO_PINS) ) { pinWMIIndicator = pinTranslate(configPage10.wmiIndicatorPin); }
+  if ( (configPage10.wmiEnabledPin != 0) && (configPage10.wmiEnabledPin < BOARD_MAX_IO_PINS) ) { pinWMIEnabled = pinTranslate(configPage10.wmiEnabledPin); }
+  if ( (configPage10.vvt2Pin != 0) && (configPage10.vvt2Pin < BOARD_MAX_IO_PINS) ) { pinVVT_2 = pinTranslate(configPage10.vvt2Pin); }
 
   //Currently there's no default pin for Idle Up
   pinIdleUp = pinTranslate(configPage2.idleUpPin);
@@ -2379,7 +2421,7 @@ void setPinMapping(byte boardID)
   /* Reset control is a special case. If reset control is enabled, it needs its initial state set BEFORE its pinMode.
      If that doesn't happen and reset control is in "Serial Command" mode, the Arduino will end up in a reset loop
      because the control pin will go low as soon as the pinMode is set to OUTPUT. */
-  if ( (configPage4.resetControlConfig != 0) && (configPage4.resetControlPin < BOARD_NR_GPIO_PINS) )
+  if ( (configPage4.resetControlConfig != 0) && (configPage4.resetControlPin < BOARD_MAX_IO_PINS) )
   {
     resetControl = configPage4.resetControlConfig;
     pinResetControl = pinTranslate(configPage4.resetControlPin);
