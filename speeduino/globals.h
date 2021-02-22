@@ -191,11 +191,14 @@
 
 #define COMPOSITE_LOG_PRI   0
 #define COMPOSITE_LOG_SEC   1
-#define COMPOSITE_LOG_TRIG  2
-#define COMPOSITE_LOG_SYNC  3
+#define COMPOSITE_LOG_TRIG 2
+#define COMPOSITE_LOG_SYNC 3
 
-#define INJ_PAIRED          0
-#define INJ_SEMISEQUENTIAL  1
+#define INJ_TYPE_PORT 0
+#define INJ_TYPE_TBODY 1
+
+#define INJ_PAIRED 0
+#define INJ_SEMISEQUENTIAL 1
 #define INJ_BANKED          2
 #define INJ_SEQUENTIAL      3
 
@@ -210,6 +213,7 @@
 
 #define SEC_TRIGGER_SINGLE  0
 #define SEC_TRIGGER_4_1     1
+#define SEC_TRIGGER_POLL    2
 
 #define ROTARY_IGN_FC       0
 #define ROTARY_IGN_FD       1
@@ -617,6 +621,7 @@ struct statuses {
   int16_t fuelLoad;
   int16_t fuelLoad2;
   int16_t ignLoad;
+  int16_t ignLoad2;
   bool fuelPumpOn; /**< Indicator showing the current status of the fuel pump */
   byte syncLossCounter;
   byte knockRetard;
@@ -802,8 +807,9 @@ struct config2 {
   byte iacRPMlimitHysteresis;
 
   int8_t rtc_trim;
+  byte idleAdvVss;
 
-  byte unused2_95[4];
+  byte unused2_95[3];
 
 #if defined(CORE_AVR)
   };
@@ -830,7 +836,8 @@ struct config4 {
   byte useResync : 1;
 
   byte sparkDur; //Spark duration in ms * 10
-  byte trigPatternSec; //Mode for Missing tooth secondary trigger.  Either single tooth cam wheel or 4-1
+  byte trigPatternSec : 7; //Mode for Missing tooth secondary trigger.  Either single tooth cam wheel, 4-1 or poll level
+  byte PollLevelPolarity : 1; //for poll level cam trigger. Sets if the cam trigger is supposed to be high or low for revolution one.
   uint8_t bootloaderCaps; //Capabilities of the bootloader over stock. e.g., 0=Stock, 1=Reset protection, etc.
 
   byte resetControlConfig : 2; //Which method of reset control to use (0=None, 1=Prevent When Running, 2=Prevent Always, 3=Serial Command)

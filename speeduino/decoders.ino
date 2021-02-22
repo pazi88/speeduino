@@ -250,7 +250,7 @@ This gives much more volatile reading, but is quite useful during cranking, part
 It can only be used on patterns where the teeth are evently spaced
 It takes an argument of the full (COMPLETE) number of teeth per revolution. For a missing tooth wheel, this is the number if the tooth had NOT been missing (Eg 36-1 = 36)
 */
-static inline int crankingGetRPM(byte totalTeeth)
+static inline int crankingGetRPM(byte totalTeeth, uint16_t degreesOver)
 {
   uint16_t tempRPM = 0;
   if( (currentStatus.startRevolutions >= configPage4.StgCycles) && (currentStatus.hasSync == true) )
@@ -260,6 +260,7 @@ static inline int crankingGetRPM(byte totalTeeth)
       noInterrupts();
       revolutionTime = (toothLastToothTime - toothLastMinusOneToothTime) * totalTeeth;
       interrupts();
+      if(degreesOver == 720) { revolutionTime = revolutionTime / 2; }
       tempRPM = (US_IN_MINUTE / revolutionTime);
       if( tempRPM >= MAX_RPM ) { tempRPM = currentStatus.RPM; } //Sanity check. This can prevent spiking caused by noise on individual teeth. The new RPM should never be above 4x the cranking setting value (Remembering that this function is only called is the current RPM is less than the cranking setting)
     }
@@ -413,7 +414,12 @@ void triggerPri_missingTooth()
                 else { currentStatus.startRevolutions = 0; }
                 
                 toothCurrentCount = 1;
-                revolutionOne = !revolutionOne; //Flip sequential revolution tracker
+                if (configPage4.trigPatternSec == SEC_TRIGGER_POLL) // at tooth one check if the cam sensor is high or low in poll level mode
+                {
+                  if (configPage4.PollLevelPolarity == READ_SEC_TRIGGER()) { revolutionOne = 1; }
+                  else { revolutionOne = 0; }
+                }
+                else {revolutionOne = !revolutionOne;} //Flip sequential revolution tracker if poll level is not used
                 toothOneMinusOneTime = toothOneTime;
                 toothOneTime = curTime;
 
@@ -421,7 +427,7 @@ void triggerPri_missingTooth()
                 if( (configPage4.sparkMode == IGN_MODE_SEQUENTIAL) || (configPage2.injLayout == INJ_SEQUENTIAL) )
                 {
                   //If either fuel or ignition is sequential, only declare sync if the cam tooth has been seen OR if the missing wheel is on the cam
-                  if( (secondaryToothCount > 0) || (configPage4.TrigSpeed == CAM_SPEED) )
+                  if( (secondaryToothCount > 0) || (configPage4.TrigSpeed == CAM_SPEED) || (configPage4.trigPatternSec == SEC_TRIGGER_POLL) )
                   {
                     currentStatus.hasSync = true;
                     BIT_CLEAR(currentStatus.status3, BIT_STATUS3_HALFSYNC); //the engine is fully synced so clear the Half Sync bit
@@ -501,7 +507,7 @@ void triggerSec_missingTooth()
         secondaryToothCount++;
       }
     }
-    else
+    else if ( configPage4.trigPatternSec == SEC_TRIGGER_SINGLE )
     {
       //Standard single tooth cam trigger
       revolutionOne = 1; //Sequential revolution reset
@@ -531,8 +537,8 @@ uint16_t getRPM_missingTooth()
   {
     if(toothCurrentCount != 1)
     {
-      if(configPage4.TrigSpeed == CAM_SPEED) { tempRPM = crankingGetRPM(configPage4.triggerTeeth/2); } //Account for cam speed
-      else { tempRPM = crankingGetRPM(configPage4.triggerTeeth); }
+      if(configPage4.TrigSpeed == CAM_SPEED) { tempRPM = crankingGetRPM(configPage4.triggerTeeth, 720); } //Account for cam speed
+      else { tempRPM = crankingGetRPM(configPage4.triggerTeeth, 360); }
     }
     else { tempRPM = currentStatus.RPM; } //Can't do per tooth RPM if we're at tooth #1 as the missing tooth messes the calculation
   }
@@ -739,7 +745,7 @@ uint16_t getRPM_DualWheel()
   uint16_t tempRPM = 0;
   if( currentStatus.hasSync == true )
   {
-    if(currentStatus.RPM < currentStatus.crankRPM) { tempRPM = crankingGetRPM(configPage4.triggerTeeth); }
+    if(currentStatus.RPM < currentStatus.crankRPM) { tempRPM = crankingGetRPM(configPage4.triggerTeeth, 360); }
     else { tempRPM = stdGetRPM(360); }
   }
   return tempRPM;
@@ -925,7 +931,7 @@ uint16_t getRPM_BasicDistributor()
   uint16_t tempRPM;
   if( currentStatus.RPM < currentStatus.crankRPM)
   { 
-    tempRPM = crankingGetRPM( (triggerActualTeeth / 2) ); //crankGetRPM uses teeth per 360 degrees. As triggerActualTeeh is total teeth in 720 degrees, we divide the tooth count by 2
+    tempRPM = crankingGetRPM(triggerActualTeeth, 720);
   } 
   else { tempRPM = stdGetRPM(720); }
 
@@ -2457,7 +2463,7 @@ uint16_t getRPM_non360()
   uint16_t tempRPM = 0;
   if( (currentStatus.hasSync == true) && (toothCurrentCount != 0) )
   {
-    if(currentStatus.RPM < currentStatus.crankRPM) { tempRPM = crankingGetRPM(configPage4.triggerTeeth); }
+    if(currentStatus.RPM < currentStatus.crankRPM) { tempRPM = crankingGetRPM(configPage4.triggerTeeth, 360); }
     else { tempRPM = stdGetRPM(360); }
   }
   return tempRPM;
@@ -3404,11 +3410,11 @@ uint16_t getRPM_ThirtySixMinus222()
     
     if( (configPage2.nCylinders == 4) && (toothCurrentCount != 19) && (toothCurrentCount != 16) && (toothCurrentCount != 34) && (triggerToothAngleIsCorrect == true) )
     {
-      tempRPM = crankingGetRPM(36);
+      tempRPM = crankingGetRPM(36, 360);
     }
     else if( (configPage2.nCylinders == 6) && (toothCurrentCount != 9) && (toothCurrentCount != 12) && (toothCurrentCount != 33) && (triggerToothAngleIsCorrect == true) )
     {
-      tempRPM = crankingGetRPM(36);
+      tempRPM = crankingGetRPM(36, 360);
     }
     else { tempRPM = currentStatus.RPM; } //Can't do per tooth RPM if we're at and of the missing teeth as it messes the calculation
   }
@@ -3564,7 +3570,7 @@ uint16_t getRPM_ThirtySixMinus21()
   {
     if( (toothCurrentCount != 20) && (triggerToothAngleIsCorrect == true) )
     {
-      tempRPM = crankingGetRPM(36);
+      tempRPM = crankingGetRPM(36, 360);
     }
     else { tempRPM = currentStatus.RPM; } //Can't do per tooth RPM if we're at tooth #1 as the missing tooth messes the calculation
   }
@@ -3963,7 +3969,7 @@ uint16_t getRPM_FordST170()
   {
     if(toothCurrentCount != 1)
     {
-      tempRPM = crankingGetRPM(36);
+      tempRPM = crankingGetRPM(36, 360);
     }
     else { tempRPM = currentStatus.RPM; } //Can't do per tooth RPM if we're at tooth #1 as the missing tooth messes the calculation
   }
