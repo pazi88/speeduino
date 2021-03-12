@@ -519,43 +519,30 @@ void triggerSec_missingTooth()
       secondaryToothCount++;
     }
     toothLastSecToothTime = curTime2;
-
-    //Record the VVT Angle
-    if( (configPage6.vvtEnabled > 0) && (revolutionOne == 1) )
-    {
-      int16_t curAngle;
-      curAngle = getCrankAngle();
-      while(curAngle > 360) { curAngle -= 360; }
-      curAngle -= configPage4.triggerAngle; //Value at TDC
-      if( configPage6.vvtMode == VVT_MODE_CLOSED_LOOP ) { curAngle -= configPage10.vvtCLMinAng; }
-
-      currentStatus.vvt1Angle = int8_t (curAngle); //vvt1Angle is only int8, but +/-127 degrees is enough for VVT control
-    }
   } //Trigger filter
-}
 
-void triggerThird_missingTooth()
-{
-  curTime3 = micros();
-  curGap3 = curTime3 - toothLastThirdToothTime;
-
-  //Safety check for initial startup
-  if( (toothLastThirdToothTime == 0) )
-  { 
-    curGap3 = 0; 
-    toothLastThirdToothTime = curTime3;
-  }
-
-  if ( curGap3 >= triggerSecFilterTime )
+  //Record the VVT Angle
+  if( (configPage6.vvtEnabled > 0) && (revolutionOne == 1) )
   {
-    //Record the VVT2 Angle (the only purpose of the third trigger)
     int16_t curAngle;
     curAngle = getCrankAngle();
     while(curAngle > 360) { curAngle -= 360; }
     curAngle -= configPage4.triggerAngle; //Value at TDC
-    if( configPage6.vvtMode == VVT_MODE_CLOSED_LOOP ) { curAngle -= configPage4.vvt2CLMinAng; }
-    currentStatus.vvt2Angle = int8_t (curAngle); //vvt1Angle is only int8, but +/-127 degrees is enough for VVT control
-  } //Trigger filter
+    if( configPage6.vvtMode == VVT_MODE_CLOSED_LOOP ) { curAngle -= configPage10.vvtCLMinAng; }
+
+    currentStatus.vvt1Angle = int8_t (curAngle); //vvt1Angle is only int8, but +/-127 degrees is enough for VVT control
+  }
+}
+
+void triggerThird_missingTooth()
+{
+  //Record the VVT2 Angle (the only purpose of the third trigger)
+  int16_t curAngle;
+  curAngle = getCrankAngle();
+  while(curAngle > 360) { curAngle -= 360; }
+  curAngle -= configPage4.triggerAngle; //Value at TDC
+  if( configPage6.vvtMode == VVT_MODE_CLOSED_LOOP ) { curAngle -= configPage4.vvt2CLMinAng; }
+  currentStatus.vvt2Angle = int8_t (curAngle); //vvt1Angle is only int8, but +/-127 degrees is enough for VVT control
 }
 
 uint16_t getRPM_missingTooth()
