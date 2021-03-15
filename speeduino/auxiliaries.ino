@@ -446,9 +446,9 @@ void wmiControl()
   // wmi can only work when vvt is disabled 
   if( (configPage6.vvtEnabled == 0) && (configPage10.wmiEnabled >= 1) )
   {
-    (currentStatus.status4, BIT_STATUS4_WMI_EMPTY) = WMI_TANK_IS_EMPTY();
-    if(BIT_CHECK(currentStatus.status4, BIT_STATUS4_WMI_EMPTY) == 0)
+    if( !WMI_TANK_IS_EMPTY() )
     {
+    BIT_CLEAR(currentStatus.status4, BIT_STATUS4_WMI_EMPTY);
       if( (currentStatus.TPS >= configPage10.wmiTPS) && (currentStatus.RPMdiv100 >= configPage10.wmiRPM) && ( (currentStatus.MAP / 2) >= configPage10.wmiMAP) && ( (currentStatus.IAT + CALIBRATION_TEMPERATURE_OFFSET) >= configPage10.wmiIAT) )
       {
         switch(configPage10.wmiMode)
@@ -476,6 +476,7 @@ void wmiControl()
         }
       }
     }
+    else { BIT_SET(currentStatus.status4, BIT_STATUS4_WMI_EMPTY); }
 
     currentStatus.wmiPW = wmiPW;
     vvt1_pwm_cur_value = wmiPW;
