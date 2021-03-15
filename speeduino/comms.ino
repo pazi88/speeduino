@@ -870,7 +870,7 @@ byte getStatusEntry(uint16_t byteNum)
     case 104: statusValue = currentStatus.fuelPressure; break;
     case 105: statusValue = currentStatus.oilPressure; break;
     case 106: statusValue = currentStatus.wmiPW; break;
-    case 107: statusValue = currentStatus.wmiEmpty; break;
+    case 107: statusValue = currentStatus.status4; break;
     case 108: statusValue = currentStatus.vvt2Angle; break;
     case 109: statusValue = currentStatus.vvt2TargetAngle; break;
     case 110: statusValue = (byte)(currentStatus.vvt2Duty); break;

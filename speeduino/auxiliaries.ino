@@ -124,6 +124,8 @@ void initialiseAuxPWM()
     currentStatus.vvt2Duty = 0;
     vvt2_pwm_cur_value = 0;
     ENABLE_VVT_TIMER(); //Turn on the B compare unit (ie turn on the interrupt)
+    BIT_CLEAR(currentStatus.status4, BIT_STATUS4_VVT1_ERROR);
+    BIT_CLEAR(currentStatus.status4, BIT_STATUS4_VVT2_ERROR);
   }
   if( (configPage6.vvtEnabled == 0) && (configPage10.wmiEnabled >= 1) )
   {
@@ -133,7 +135,7 @@ void initialiseAuxPWM()
     #elif defined(CORE_TEENSY)
       vvt_pwm_max_count = 1000000L / (32 * configPage6.vvtFreq * 2); //Converts the frequency in Hz to the number of ticks (at 16uS) it takes to complete 1 cycle. Note that the frequency is divided by 2 coming from TS to allow for up to 512hz
     #endif
-    currentStatus.wmiEmpty = 0;
+    BIT_CLEAR(currentStatus.status4, BIT_STATUS4_WMI_EMPTY);
     currentStatus.wmiPW = 0;
     vvt1_pwm_cur_value = 0;
     ENABLE_VVT_TIMER(); //Turn on the B compare unit (ie turn on the interrupt)
@@ -266,12 +268,19 @@ void vvtControl()
 
       if( (vvtCounter & 31) == 1) { vvtPID.SetTunings(configPage10.vvtCLKP, configPage10.vvtCLKI, configPage10.vvtCLKD); } //This only needs to be run very infrequently, once every 32 calls to vvtControl(). This is approx. once per second
 
+      // safety check that the cam angles are ok. The engine will be totally undriveable if the cam sensor is faulty and giving wrong cam angles, so if that happens, default to 0 duty.
+      if ( currentStatus.vvt1Angle < configPage10.vvtCLMinAng || currentStatus.vvt1Angle > configPage10.vvtCLMaxAng )
+      {
+        currentStatus.vvt1Duty = 0;
+        BIT_SET(currentStatus.status4, BIT_STATUS4_VVT1_ERROR);
+      }
       //Check that we're not already at the angle we want to be
-      if((configPage6.vvtCLUseHold > 0) && (currentStatus.vvt1TargetAngle == currentStatus.vvt1Angle << 1) )
+      else if((configPage6.vvtCLUseHold > 0) && (currentStatus.vvt1TargetAngle == currentStatus.vvt1Angle << 1) )
       {
         currentStatus.vvt1Duty = configPage10.vvtCLholdDuty;
         vvt1_pwm_cur_value = halfpercentage(currentStatus.vvt1Duty, vvt_pwm_max_count);
         vvtPID.Initialize();
+        BIT_CLEAR(currentStatus.status4, BIT_STATUS4_VVT1_ERROR);
       }
       else
       {
@@ -286,6 +295,7 @@ void vvtControl()
         //vvt_pwm_target_value = percentage(40, vvt_pwm_max_count);
         //if (currentStatus.vvt1Angle > currentStatus.vvt1TargetAngle) { vvt_pwm_target_value = 0; }
         if(PID_compute == true) { vvt1_pwm_cur_value = halfpercentage(currentStatus.vvt1Duty, vvt_pwm_max_count); }
+        BIT_CLEAR(currentStatus.status4, BIT_STATUS4_VVT1_ERROR);
       }
 
       if (configPage10.vvt2Enabled == 1) // same for VVT2 if it's enabled
@@ -295,12 +305,19 @@ void vvtControl()
 
         if( (vvtCounter & 31) == 1) { vvt2PID.SetTunings(configPage10.vvtCLKP, configPage10.vvtCLKI, configPage10.vvtCLKD); } //This only needs to be run very infrequently, once every 32 calls to vvtControl(). This is approx. once per second
 
+        // safety check that the cam angles are ok. The engine will be totally undriveable if the cam sensor is faulty and giving wrong cam angles, so if that happens, default to 0 duty.
+        if ( currentStatus.vvt2Angle < configPage10.vvtCLMinAng || currentStatus.vvt2Angle > configPage10.vvtCLMaxAng )
+        {
+          currentStatus.vvt1Duty = 0;
+          BIT_SET(currentStatus.status4, BIT_STATUS4_VVT1_ERROR);
+        }
         //Check that we're not already at the angle we want to be
-        if((configPage6.vvtCLUseHold > 0) && (currentStatus.vvt2TargetAngle == currentStatus.vvt2Angle << 1) )
+        else if((configPage6.vvtCLUseHold > 0) && (currentStatus.vvt2TargetAngle == currentStatus.vvt2Angle << 1) )
         {
           currentStatus.vvt2Duty = configPage10.vvtCLholdDuty;
           vvt2_pwm_cur_value = halfpercentage(currentStatus.vvt2Duty, vvt_pwm_max_count);
           vvt2PID.Initialize();
+          BIT_CLEAR(currentStatus.status4, BIT_STATUS4_VVT1_ERROR);
         }
         else
         {
@@ -311,6 +328,7 @@ void vvtControl()
           //If not already at target angle, calculate new value from PID
           bool PID_compute = vvt2PID.Compute(true);
           if(PID_compute == true) { vvt2_pwm_cur_value = halfpercentage(currentStatus.vvt2Duty, vvt_pwm_max_count); }
+          BIT_CLEAR(currentStatus.status4, BIT_STATUS4_VVT1_ERROR);
         }
       }
       //currentStatus.vvt1Duty = 0;
@@ -428,8 +446,8 @@ void wmiControl()
   // wmi can only work when vvt is disabled 
   if( (configPage6.vvtEnabled == 0) && (configPage10.wmiEnabled >= 1) )
   {
-    currentStatus.wmiEmpty = WMI_TANK_IS_EMPTY();
-    if(currentStatus.wmiEmpty == 0)
+    (currentStatus.status4, BIT_STATUS4_WMI_EMPTY) = WMI_TANK_IS_EMPTY();
+    if(BIT_CHECK(currentStatus.status4, BIT_STATUS4_WMI_EMPTY) == 0)
     {
       if( (currentStatus.TPS >= configPage10.wmiTPS) && (currentStatus.RPMdiv100 >= configPage10.wmiRPM) && ( (currentStatus.MAP / 2) >= configPage10.wmiMAP) && ( (currentStatus.IAT + CALIBRATION_TEMPERATURE_OFFSET) >= configPage10.wmiIAT) )
       {

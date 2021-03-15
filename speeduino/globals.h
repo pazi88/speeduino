@@ -181,6 +181,15 @@
 #define BIT_STATUS3_NSQUIRTS2     6
 #define BIT_STATUS3_NSQUIRTS3     7
 
+#define BIT_STATUS4_WMI_EMPTY     0 //Indicates whether reset prevention is enabled
+#define BIT_STATUS4_VVT1_ERROR    1
+#define BIT_STATUS4_VVT2_ERROR    2
+#define BIT_STATUS4_UNUSED4       3
+#define BIT_STATUS4_UNUSED5       4
+#define BIT_STATUS4_UNUSED6       5
+#define BIT_STATUS4_UNUSED7       6
+#define BIT_STATUS4_UNUSED8       7
+
 #define VALID_MAP_MAX 1022 //The largest ADC value that is valid for the MAP sensor
 #define VALID_MAP_MIN 2 //The smallest ADC value that is valid for the MAP sensor
 
@@ -646,7 +655,7 @@ struct statuses {
   byte oilPressure; /**< Oil pressure in PSI */
   byte engineProtectStatus;
   byte wmiPW;
-  bool wmiEmpty;
+  volatile byte status4;
   int8_t vvt2Angle;
   byte vvt2TargetAngle;
   long vvt2Duty; //Has to be a long for PID calcs (CL VVT control)
@@ -1200,8 +1209,9 @@ struct config10 {
   byte vvtCLKP; //Byte 127
   byte vvtCLKI; //Byte 128
   byte vvtCLKD; //Byte 129
-  int16_t vvtCLMinAng; //Bytes 130-131
-  int16_t vvtCLMaxAng; //Bytes 132-133
+  int16_t vvtCL0DutyAng; //Bytes 130-131
+  int8_t vvtCLMinAng; //Byte 132
+  int8_t vvtCLMaxAng; //Byte 133
 
   byte crankingEnrichTaper; //Byte 134
 

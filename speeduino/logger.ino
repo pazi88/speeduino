@@ -128,7 +128,7 @@ void createLog(uint8_t *logBuffer)
     logBuffer[104] = currentStatus.fuelPressure;
     logBuffer[105] = currentStatus.oilPressure;
     logBuffer[106] = currentStatus.wmiPW;
-    logBuffer[107] = currentStatus.wmiEmpty;
+    logBuffer[107] = currentStatus.status4;
     logBuffer[108] = currentStatus.vvt2Angle;
     logBuffer[109] = currentStatus.vvt2TargetAngle;
     logBuffer[110] = (byte) currentStatus.vvt2Duty;

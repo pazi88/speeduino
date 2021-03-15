@@ -528,7 +528,7 @@ void triggerSec_missingTooth()
     curAngle = getCrankAngle();
     while(curAngle > 360) { curAngle -= 360; }
     curAngle -= configPage4.triggerAngle; //Value at TDC
-    if( configPage6.vvtMode == VVT_MODE_CLOSED_LOOP ) { curAngle -= configPage10.vvtCLMinAng; }
+    if( configPage6.vvtMode == VVT_MODE_CLOSED_LOOP ) { curAngle -= configPage10.vvtCL0DutyAng; }
 
     currentStatus.vvt1Angle = int8_t (curAngle); //vvt1Angle is only int8, but +/-127 degrees is enough for VVT control
   }
@@ -2247,7 +2247,7 @@ int getCamAngle_Miata9905()
 {
   //lastVVTtime is the time between tooth #1 (10* BTDC) and the single cam tooth. 
   //All cam angles in in BTDC, so the actual advance angle is 370 - fastTimeToAngle(lastVVTtime) - <the angle of the cam at 0 advance>
-  currentStatus.vvt1Angle = 370 - fastTimeToAngle(lastVVTtime) - configPage10.vvtCLMinAng;
+  currentStatus.vvt1Angle = 370 - fastTimeToAngle(lastVVTtime) - configPage10.vvtCL0DutyAng;
 
   return currentStatus.vvt1Angle;
 }
@@ -3971,7 +3971,7 @@ void triggerSec_FordST170()
       while(curAngle > 360) { curAngle -= 360; }
       if( configPage6.vvtMode == VVT_MODE_CLOSED_LOOP )
       {
-        currentStatus.vvt1Angle = 360 - curAngle - configPage10.vvtCLMinAng;
+        currentStatus.vvt1Angle = 360 - curAngle - configPage10.vvtCL0DutyAng;
       }
     }
   } //Trigger filter
