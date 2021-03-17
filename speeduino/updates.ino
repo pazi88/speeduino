@@ -476,7 +476,7 @@ void doUpdates()
     configPage10.TrigEdgeThrd = 0;
 
     //Old use as On/Off selection is removed, so change VVT mode to On/Off based on that
-    if(configPage6.unused_bit = 1) { configPage6.vvtMode == VVT_MODE_ONOFF; }
+    if(configPage6.unused_bit == 1) { configPage6.vvtMode = VVT_MODE_ONOFF; }
 
     writeAllConfig();
     EEPROM.write(EEPROM_DATA_VERSION, 18);
