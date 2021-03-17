@@ -12,8 +12,9 @@ A full copy of the license may be found in the projects root directory
 //Old PID method. Retained incase the new one has issues
 //integerPID boostPID(&MAPx100, &boost_pwm_target_value, &boostTargetx100, configPage6.boostKP, configPage6.boostKI, configPage6.boostKD, DIRECT);
 integerPID_ideal boostPID(&currentStatus.MAP, &currentStatus.boostDuty , &currentStatus.boostTarget, &configPage10.boostSens, &configPage10.boostIntv, configPage6.boostKP, configPage6.boostKI, configPage6.boostKD, DIRECT); //This is the PID object if that algorithm is used. Needs to be global as it maintains state outside of each function call
-integerPID vvtPID(&vvt_pid_current_angle, &currentStatus.vvt1Duty, &vvt_pid_target_angle, configPage10.vvtCLKP, configPage10.vvtCLKI, configPage10.vvtCLKD, DIRECT); //This is the PID object if that algorithm is used. Needs to be global as it maintains state outside of each function call
-integerPID vvt2PID(&vvt2_pid_current_angle, &currentStatus.vvt2Duty, &vvt2_pid_target_angle, configPage10.vvtCLKP, configPage10.vvtCLKI, configPage10.vvtCLKD, DIRECT); //This is the PID object if that algorithm is used. Needs to be global as it maintains state outside of each function call
+integerPID vvtPID(&vvt_pid_current_angle, &currentStatus.vvt1Duty, &vvt_pid_target_angle, configPage10.vvtCLKP, configPage10.vvtCLKI, configPage10.vvtCLKD, configPage6.vvtPWMdir); //This is the PID object if that algorithm is used. Needs to be global as it maintains state outside of each function call
+integerPID vvt2PID(&vvt2_pid_current_angle, &currentStatus.vvt2Duty, &vvt2_pid_target_angle, configPage10.vvtCLKP, configPage10.vvtCLKI, configPage10.vvtCLKD, configPage4.vvt2PWMdir); //This is the PID object if that algorithm is used. Needs to be global as it maintains state outside of each function call
+
 
 /*
 Fan control
@@ -308,8 +309,8 @@ void vvtControl()
         // safety check that the cam angles are ok. The engine will be totally undriveable if the cam sensor is faulty and giving wrong cam angles, so if that happens, default to 0 duty.
         if ( currentStatus.vvt2Angle < configPage10.vvtCLMinAng || currentStatus.vvt2Angle > configPage10.vvtCLMaxAng )
         {
-          currentStatus.vvt1Duty = 0;
-          BIT_SET(currentStatus.status4, BIT_STATUS4_VVT1_ERROR);
+          currentStatus.vvt2Duty = 0;
+          BIT_SET(currentStatus.status4, BIT_STATUS4_VVT2_ERROR);
         }
         //Check that we're not already at the angle we want to be
         else if((configPage6.vvtCLUseHold > 0) && (currentStatus.vvt2TargetAngle == currentStatus.vvt2Angle << 1) )
@@ -317,7 +318,7 @@ void vvtControl()
           currentStatus.vvt2Duty = configPage10.vvtCLholdDuty;
           vvt2_pwm_cur_value = halfpercentage(currentStatus.vvt2Duty, vvt_pwm_max_count);
           vvt2PID.Initialize();
-          BIT_CLEAR(currentStatus.status4, BIT_STATUS4_VVT1_ERROR);
+          BIT_CLEAR(currentStatus.status4, BIT_STATUS4_VVT2_ERROR);
         }
         else
         {
@@ -328,7 +329,7 @@ void vvtControl()
           //If not already at target angle, calculate new value from PID
           bool PID_compute = vvt2PID.Compute(true);
           if(PID_compute == true) { vvt2_pwm_cur_value = halfpercentage(currentStatus.vvt2Duty, vvt_pwm_max_count); }
-          BIT_CLEAR(currentStatus.status4, BIT_STATUS4_VVT1_ERROR);
+          BIT_CLEAR(currentStatus.status4, BIT_STATUS4_VVT2_ERROR);
         }
       }
       //currentStatus.vvt1Duty = 0;
