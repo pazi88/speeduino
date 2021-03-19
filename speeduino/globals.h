@@ -643,7 +643,7 @@ struct statuses {
   bool knockActive;
   bool toothLogEnabled;
   bool compositeLogEnabled;
-  int8_t vvt1Angle;
+  int16_t vvt1Angle; //Has to be a long for PID calcs (CL VVT control)
   byte vvt1TargetAngle;
   long vvt1Duty; //Has to be a long for PID calcs (CL VVT control)
   uint16_t injAngle;
@@ -656,7 +656,7 @@ struct statuses {
   byte engineProtectStatus;
   byte wmiPW;
   volatile byte status4;
-  int8_t vvt2Angle;
+  int16_t vvt2Angle; //Has to be a long for PID calcs (CL VVT control)
   byte vvt2TargetAngle;
   long vvt2Duty; //Has to be a long for PID calcs (CL VVT control)
   byte outputsStatus;
@@ -917,8 +917,9 @@ struct config4 {
   int16_t vvt2CLMinAng;
   byte vvt2PWMdir : 1;
   byte unusedBits4 : 7;
+  byte ANGLEFILTER_VVT;
 
-  byte unused4_124[4];
+  byte unused4_124[3];
 
 #if defined(CORE_AVR)
   };

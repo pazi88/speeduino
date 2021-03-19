@@ -276,7 +276,7 @@ void vvtControl()
         BIT_SET(currentStatus.status4, BIT_STATUS4_VVT1_ERROR);
       }
       //Check that we're not already at the angle we want to be
-      else if((configPage6.vvtCLUseHold > 0) && (currentStatus.vvt1TargetAngle == currentStatus.vvt1Angle << 1) )
+      else if((configPage6.vvtCLUseHold > 0) && (currentStatus.vvt1TargetAngle == currentStatus.vvt1Angle) )
       {
         currentStatus.vvt1Duty = configPage10.vvtCLholdDuty;
         vvt1_pwm_cur_value = halfpercentage(currentStatus.vvt1Duty, vvt_pwm_max_count);
@@ -288,7 +288,7 @@ void vvtControl()
         //This is dumb, but need to convert the current angle into a long pointer.
         //VVT target angle has accurasy of 0.5 and current angle has accurasy of 1 so that's reason for bitshift for VVT angle.
         vvt_pid_target_angle = (unsigned long)currentStatus.vvt1TargetAngle;
-        vvt_pid_current_angle = (unsigned long)currentStatus.vvt1Angle <<  1;
+        vvt_pid_current_angle = (unsigned long)currentStatus.vvt1Angle;
 
         //If not already at target angle, calculate new value from PID
         bool PID_compute = vvtPID.ComputeVVT(configPage6.vvtPWMdir);
@@ -313,7 +313,7 @@ void vvtControl()
           BIT_SET(currentStatus.status4, BIT_STATUS4_VVT2_ERROR);
         }
         //Check that we're not already at the angle we want to be
-        else if((configPage6.vvtCLUseHold > 0) && (currentStatus.vvt2TargetAngle == currentStatus.vvt2Angle << 1) )
+        else if((configPage6.vvtCLUseHold > 0) && (currentStatus.vvt2TargetAngle == currentStatus.vvt2Angle) )
         {
           currentStatus.vvt2Duty = configPage10.vvtCLholdDuty;
           vvt2_pwm_cur_value = halfpercentage(currentStatus.vvt2Duty, vvt_pwm_max_count);
@@ -325,7 +325,7 @@ void vvtControl()
           //This is dumb, but need to convert the current angle into a long pointer.
           //VVT2 target angle has accurasy of 0.5 and current angle has accurasy of 1 so that's reason for bitshift for VVT angle.
           vvt2_pid_target_angle = (unsigned long)currentStatus.vvt2TargetAngle;
-          vvt2_pid_current_angle = (unsigned long)currentStatus.vvt2Angle << 1;
+          vvt2_pid_current_angle = (unsigned long)currentStatus.vvt2Angle;
           //If not already at target angle, calculate new value from PID
           bool PID_compute = vvt2PID.ComputeVVT(configPage4.vvt2PWMdir);
           if(PID_compute == true) { vvt2_pwm_cur_value = halfpercentage(currentStatus.vvt2Duty, vvt_pwm_max_count); }

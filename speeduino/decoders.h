@@ -33,6 +33,8 @@
 #define DECODER_WEBER             19
 #define DECODER_ST170             20
 
+#define ANGLE_FILTER(input, alpha, prior) (((long)input * (256 - alpha) + ((long)prior * alpha))) >> 8
+
 static inline void addToothLogEntry(unsigned long, bool);
 void loggerPrimaryISR();
 void loggerSecondaryISR();
