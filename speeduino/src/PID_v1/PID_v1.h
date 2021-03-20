@@ -135,9 +135,9 @@ class integerPID
   byte dispKp;
   byte dispKi;
   byte dispKd;
-	uint16_t  kp;                  // * (P)roportional Tuning Parameter
-  uint16_t  ki;                  // * (I)ntegral Tuning Parameter
-  uint16_t  kd;                  // * (D)erivative Tuning Parameter
+  int16_t  kp;                  // * (P)roportional Tuning Parameter
+  int16_t  ki;                  // * (I)ntegral Tuning Parameter
+  int16_t  kd;                  // * (D)erivative Tuning Parameter
 
 	int controllerDirection;
 
