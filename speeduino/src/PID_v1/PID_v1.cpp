@@ -296,67 +296,39 @@ bool integerPID::Compute(bool pOnE, long FeedForwardTerm)
    return false;
 }
 
-bool integerPID::ComputeVVT(bool Direction, long FeedForwardTerm)
+bool integerPID::ComputeVVT(uint32_t Sample)
 {
    if(!inAuto) return false;
-   unsigned long now = millis();
-   unsigned long timeChange = (now - lastTime);
-   if(timeChange >= SampleTime)
+   /*Compute all the working error variables*/
+   long pTerm, dTerm;
+   long input = *myInput;
+   long error = *mySetpoint - input;
+   long dInput = error - lastError;
+   long dTime = lastTime - Sample;
+
+   pTerm = kp * error;
+
+   if (ki != 0)
    {
-      /*Compute all the working error variables*/
-      long input = *myInput;
-      if(input > 0) //Fail safe, should never be 0
-      {
-         long error = *mySetpoint - input;
-         long dInput = (input - lastInput);
-         long outMinResized = outMin<<PID_SHIFTS;
-         long outMaxResized = outMax<<PID_SHIFTS;
-         FeedForwardTerm <<= PID_SHIFTS;
-
-         long output;
-         if ( Direction ) //Normal direction
-         {
-           if (ki != 0)
-           {
-              outputSum += (ki * error); //integral += error × dt
-              if(outputSum > outMaxResized-FeedForwardTerm) { outputSum = outMaxResized-FeedForwardTerm; }
-              else if(outputSum < outMinResized-FeedForwardTerm) { outputSum = outMinResized-FeedForwardTerm; }
-           }
-
-           /*Compute PID Output*/
-           output = (kp * error);
-           if (ki != 0) { output += outputSum; }
-           if (kd != 0) { output -= (kd * dInput)>>2; }
-         }
-         else  //Reverse direction
-         {
-           if (ki != 0)
-           {
-              outputSum += ((0-ki) * error); //integral += error × dt
-              if(outputSum > outMaxResized-FeedForwardTerm) { outputSum = outMaxResized-FeedForwardTerm; }
-              else if(outputSum < outMinResized-FeedForwardTerm) { outputSum = outMinResized-FeedForwardTerm; }
-           }
-
-           /*Compute PID Output*/
-           output = ((0-kp) * error);
-           if (ki != 0) { output += outputSum; }
-           if (kd != 0) { output -= ((0-kd) * dInput)>>2; }
-         }
-         output += FeedForwardTerm;
-         output >>= PID_SHIFTS;
-
-         if(output > outMax) output = outMax;
-         else if(output < outMin) output = outMin;
-         *myOutput = output;
-
-         /*Remember some variables for next time*/
-         lastInput = input;
-         lastTime = now;
-
-         return true;
-      }
+      outputSum += (ki * error) * dTime; //integral += error × dt
+      if(outputSum > outMax*100) { outputSum = outMax*100; }
+      else if(outputSum < -outMax*100) { outputSum = -outMax*100; }
    }
-   return false;
+
+   dTerm = dInput * kd * dTime;
+
+   /*Compute PID Output*/
+   long output = (pTerm + outputSum + dTerm) >> 5;
+
+   if(output > outMax) output = outMax;
+   else if(output < outMin) output = outMin;
+   *myOutput = output;
+
+   /*Remember some variables for next time*/
+   lastError = error;
+   lastTime = dTime;
+
+   return true;
 }
 
 bool integerPID::Compute2(int target, int input, bool pOnE)

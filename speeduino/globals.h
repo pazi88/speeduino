@@ -181,9 +181,9 @@
 #define BIT_STATUS3_NSQUIRTS2     6
 #define BIT_STATUS3_NSQUIRTS3     7
 
-#define BIT_STATUS4_WMI_EMPTY     0 //Indicates whether reset prevention is enabled
-#define BIT_STATUS4_VVT1_ERROR    1
-#define BIT_STATUS4_VVT2_ERROR    2
+#define BIT_STATUS4_WMI_EMPTY     0 //Indicates whether the WMI tank is empty
+#define BIT_STATUS4_VVT1_ERROR    1 //VVT1 cam angle within limits or not
+#define BIT_STATUS4_VVT2_ERROR    2 //VVT2 cam angle within limits or not
 #define BIT_STATUS4_UNUSED4       3
 #define BIT_STATUS4_UNUSED5       4
 #define BIT_STATUS4_UNUSED6       5
