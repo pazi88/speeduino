@@ -271,7 +271,7 @@ void vvtControl()
       vvtPID.SetControllerDirection(configPage6.vvtPWMdir); }
 
       // safety check that the cam angles are ok. The engine will be totally undriveable if the cam sensor is faulty and giving wrong cam angles, so if that happens, default to 0 duty.
-      if ( currentStatus.vvt1Angle < ( configPage10.vvtCLMinAng << 1 ) || currentStatus.vvt1Angle > ( configPage10.vvtCLMaxAng  << 1 )
+      if ( currentStatus.vvt1Angle < ( configPage10.vvtCLMinAng << 1 ) || currentStatus.vvt1Angle > ( configPage10.vvtCLMaxAng  << 1 ) )
       {
         currentStatus.vvt1Duty = 0;
         vvt1_pwm_cur_value = halfpercentage(currentStatus.vvt1Duty, vvt_pwm_max_count);
@@ -310,7 +310,7 @@ void vvtControl()
         vvt2PID.SetControllerDirection(configPage4.vvt2PWMdir); }
 
         // safety check that the cam angles are ok. The engine will be totally undriveable if the cam sensor is faulty and giving wrong cam angles, so if that happens, default to 0 duty.
-        if ( currentStatus.vvt2Angle < ( configPage10.vvtCLMinAng << 1 ) || currentStatus.vvt2Angle > ( configPage10.vvtCLMaxAng  << 1 )
+        if ( currentStatus.vvt2Angle < ( configPage10.vvtCLMinAng << 1 ) || currentStatus.vvt2Angle > ( configPage10.vvtCLMaxAng  << 1 ) )
         {
           currentStatus.vvt2Duty = 0;
           vvt2_pwm_cur_value = halfpercentage(currentStatus.vvt2Duty, vvt_pwm_max_count);
