@@ -914,7 +914,7 @@ struct config4 {
 
   byte engineProtectMaxRPM;
 
-  int16_t vvt2CLMinAng;
+  int16_t vvt2CL0DutyAng;
   byte vvt2PWMdir : 1;
   byte unusedBits4 : 7;
   byte ANGLEFILTER_VVT;
