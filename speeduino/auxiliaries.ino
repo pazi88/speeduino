@@ -121,9 +121,9 @@ void initialiseAuxPWM()
     }
 
     currentStatus.vvt1Duty = 0;
-    vvt1_pwm_cur_value = 0;
+    vvt1_pwm_value = 0;
     currentStatus.vvt2Duty = 0;
-    vvt2_pwm_cur_value = 0;
+    vvt2_pwm_value = 0;
     ENABLE_VVT_TIMER(); //Turn on the B compare unit (ie turn on the interrupt)
     BIT_CLEAR(currentStatus.status4, BIT_STATUS4_VVT1_ERROR);
     BIT_CLEAR(currentStatus.status4, BIT_STATUS4_VVT2_ERROR);
@@ -138,7 +138,7 @@ void initialiseAuxPWM()
     #endif
     BIT_CLEAR(currentStatus.status4, BIT_STATUS4_WMI_EMPTY);
     currentStatus.wmiPW = 0;
-    vvt1_pwm_cur_value = 0;
+    vvt1_pwm_value = 0;
     ENABLE_VVT_TIMER(); //Turn on the B compare unit (ie turn on the interrupt)
   }
 
@@ -246,7 +246,7 @@ void vvtControl()
       //VVT table can be used for controlling on/off switching. If this is turned on, then disregard any interpolation or non-binary values
       if( (configPage6.vvtMode == VVT_MODE_ONOFF) && (currentStatus.vvt1Duty < 200) ) { currentStatus.vvt1Duty = 0; }
 
-      vvt1_pwm_cur_value = halfpercentage(currentStatus.vvt1Duty, vvt_pwm_max_count);
+      vvt1_pwm_value = halfpercentage(currentStatus.vvt1Duty, vvt_pwm_max_count);
 
       if (configPage10.vvt2Enabled == 1) // same for VVT2 if it's enabled
       {
@@ -257,7 +257,7 @@ void vvtControl()
         //VVT table can be used for controlling on/off switching. If this is turned on, then disregard any interpolation or non-binary values
         if( (configPage6.vvtMode == VVT_MODE_ONOFF) && (currentStatus.vvt2Duty < 200) ) { currentStatus.vvt2Duty = 0; }
 
-        vvt2_pwm_cur_value = halfpercentage(currentStatus.vvt2Duty, vvt_pwm_max_count);
+        vvt2_pwm_value = halfpercentage(currentStatus.vvt2Duty, vvt_pwm_max_count);
       }
 
     } //Open loop
@@ -274,14 +274,14 @@ void vvtControl()
       if ( currentStatus.vvt1Angle < ( configPage10.vvtCLMinAng << 1 ) || currentStatus.vvt1Angle > ( configPage10.vvtCLMaxAng  << 1 ) )
       {
         currentStatus.vvt1Duty = 0;
-        vvt1_pwm_cur_value = halfpercentage(currentStatus.vvt1Duty, vvt_pwm_max_count);
+        vvt1_pwm_value = halfpercentage(currentStatus.vvt1Duty, vvt_pwm_max_count);
         BIT_SET(currentStatus.status4, BIT_STATUS4_VVT1_ERROR);
       }
       //Check that we're not already at the angle we want to be
       else if((configPage6.vvtCLUseHold > 0) && (currentStatus.vvt1TargetAngle == currentStatus.vvt1Angle) )
       {
         currentStatus.vvt1Duty = configPage10.vvtCLholdDuty;
-        vvt1_pwm_cur_value = halfpercentage(currentStatus.vvt1Duty, vvt_pwm_max_count);
+        vvt1_pwm_value = halfpercentage(currentStatus.vvt1Duty, vvt_pwm_max_count);
         vvtPID.Initialize();
         BIT_CLEAR(currentStatus.status4, BIT_STATUS4_VVT1_ERROR);
       }
@@ -297,7 +297,7 @@ void vvtControl()
         //vvtPID.Compute2(currentStatus.vvt1TargetAngle, currentStatus.vvt1Angle, false);
         //vvt_pwm_target_value = percentage(40, vvt_pwm_max_count);
         //if (currentStatus.vvt1Angle > currentStatus.vvt1TargetAngle) { vvt_pwm_target_value = 0; }
-        if(PID_compute == true) { vvt1_pwm_cur_value = halfpercentage(currentStatus.vvt1Duty, vvt_pwm_max_count); }
+        if(PID_compute == true) { vvt1_pwm_value = halfpercentage(currentStatus.vvt1Duty, vvt_pwm_max_count); }
         BIT_CLEAR(currentStatus.status4, BIT_STATUS4_VVT1_ERROR);
       }
 
@@ -313,14 +313,14 @@ void vvtControl()
         if ( currentStatus.vvt2Angle < ( configPage10.vvtCLMinAng << 1 ) || currentStatus.vvt2Angle > ( configPage10.vvtCLMaxAng  << 1 ) )
         {
           currentStatus.vvt2Duty = 0;
-          vvt2_pwm_cur_value = halfpercentage(currentStatus.vvt2Duty, vvt_pwm_max_count);
+          vvt2_pwm_value = halfpercentage(currentStatus.vvt2Duty, vvt_pwm_max_count);
           BIT_SET(currentStatus.status4, BIT_STATUS4_VVT2_ERROR);
         }
         //Check that we're not already at the angle we want to be
         else if((configPage6.vvtCLUseHold > 0) && (currentStatus.vvt2TargetAngle == currentStatus.vvt2Angle) )
         {
           currentStatus.vvt2Duty = configPage10.vvtCLholdDuty;
-          vvt2_pwm_cur_value = halfpercentage(currentStatus.vvt2Duty, vvt_pwm_max_count);
+          vvt2_pwm_value = halfpercentage(currentStatus.vvt2Duty, vvt_pwm_max_count);
           vvt2PID.Initialize();
           BIT_CLEAR(currentStatus.status4, BIT_STATUS4_VVT2_ERROR);
         }
@@ -332,7 +332,7 @@ void vvtControl()
           vvt2_pid_current_angle = (unsigned long)currentStatus.vvt2Angle;
           //If not already at target angle, calculate new value from PID
           bool PID_compute = vvt2PID.Compute(true);
-          if(PID_compute == true) { vvt2_pwm_cur_value = halfpercentage(currentStatus.vvt2Duty, vvt_pwm_max_count); }
+          if(PID_compute == true) { vvt2_pwm_value = halfpercentage(currentStatus.vvt2Duty, vvt_pwm_max_count); }
           BIT_CLEAR(currentStatus.status4, BIT_STATUS4_VVT2_ERROR);
         }
       }
@@ -377,9 +377,9 @@ void vvtControl()
     // Disable timer channel
     DISABLE_VVT_TIMER(); 
     currentStatus.vvt1Duty = 0;
-    vvt1_pwm_cur_value = 0;
+    vvt1_pwm_value = 0;
     currentStatus.vvt2Duty = 0;
-    vvt2_pwm_cur_value = 0;
+    vvt2_pwm_value = 0;
     vvt1_pwm_state = false;
     vvt1_max_pwm = false;
     vvt2_pwm_state = false;
@@ -484,7 +484,7 @@ void wmiControl()
     else { BIT_SET(currentStatus.status4, BIT_STATUS4_WMI_EMPTY); }
 
     currentStatus.wmiPW = wmiPW;
-    vvt1_pwm_cur_value = wmiPW;
+    vvt1_pwm_value = wmiPW;
 
     if(wmiPW == 0)
     {
@@ -549,26 +549,30 @@ void boostDisable()
 {
   if ( ((vvt1_pwm_state == false) || (vvt1_max_pwm == true)) && ((vvt2_pwm_state == false) || (vvt2_max_pwm == true)) )
   {
-    if( (vvt1_pwm_cur_value > 0) && (vvt1_max_pwm == false) ) //Don't toggle if at 0%
+    if( (vvt1_pwm_value > 0) && (vvt1_max_pwm == false) ) //Don't toggle if at 0%
     {
       VVT1_PIN_ON();
       vvt1_pwm_state = true;
     }
-    if( (vvt2_pwm_cur_value > 0) && (vvt2_max_pwm == false) ) //Don't toggle if at 0%
+    if( (vvt2_pwm_value > 0) && (vvt2_max_pwm == false) ) //Don't toggle if at 0%
     {
       VVT2_PIN_ON();
       vvt2_pwm_state = true;
     }
 
-    if( (vvt1_pwm_state == true) && ((vvt1_pwm_cur_value <= vvt2_pwm_cur_value) || (vvt2_pwm_state == false)) )
+    if( (vvt1_pwm_state == true) && ((vvt1_pwm_value <= vvt2_pwm_value) || (vvt2_pwm_state == false)) )
     {
-      VVT_TIMER_COMPARE = VVT_TIMER_COUNTER + vvt1_pwm_cur_value;
-      if (vvt1_pwm_cur_value == vvt2_pwm_cur_value) { nextVVT = 2; } //Next event is for both PWM
+      VVT_TIMER_COMPARE = VVT_TIMER_COUNTER + vvt1_pwm_value;
+      vvt1_pwm_cur_value = vvt1_pwm_value;
+      vvt2_pwm_cur_value = vvt2_pwm_value;
+      if (vvt1_pwm_value == vvt2_pwm_value) { nextVVT = 2; } //Next event is for both PWM
       else { nextVVT = 0; } //Next event is for PWM0
     }
     else if( vvt2_pwm_state == true )
     {
-      VVT_TIMER_COMPARE = VVT_TIMER_COUNTER + vvt2_pwm_cur_value;
+      VVT_TIMER_COMPARE = VVT_TIMER_COUNTER + vvt2_pwm_value;
+      vvt1_pwm_cur_value = vvt1_pwm_value;
+      vvt2_pwm_cur_value = vvt2_pwm_value;
       nextVVT = 1; //Next event is for PWM1
     }
     else { VVT_TIMER_COMPARE = VVT_TIMER_COUNTER + vvt_pwm_max_count; } //Shouldn't ever get here
@@ -577,7 +581,7 @@ void boostDisable()
   {
     if(nextVVT == 0)
     {
-      if(vvt1_pwm_cur_value < (long)vvt_pwm_max_count) //Don't toggle if at 100%
+      if(vvt1_pwm_value < (long)vvt_pwm_max_count) //Don't toggle if at 100%
       {
         VVT1_PIN_OFF();
         vvt1_pwm_state = false;
@@ -594,7 +598,7 @@ void boostDisable()
     }
     else if (nextVVT == 1)
     {
-      if(vvt2_pwm_cur_value < (long)vvt_pwm_max_count) //Don't toggle if at 100%
+      if(vvt2_pwm_value < (long)vvt_pwm_max_count) //Don't toggle if at 100%
       {
         VVT2_PIN_OFF();
         vvt2_pwm_state = false;
@@ -611,7 +615,7 @@ void boostDisable()
     }
     else
     {
-      if(vvt1_pwm_cur_value < (long)vvt_pwm_max_count) //Don't toggle if at 100%
+      if(vvt1_pwm_value < (long)vvt_pwm_max_count) //Don't toggle if at 100%
       {
         VVT1_PIN_OFF();
         vvt1_pwm_state = false;
@@ -619,7 +623,7 @@ void boostDisable()
         VVT_TIMER_COMPARE = VVT_TIMER_COUNTER + (vvt_pwm_max_count - vvt1_pwm_cur_value);
       }
       else { vvt1_max_pwm = true; }
-      if(vvt2_pwm_cur_value < (long)vvt_pwm_max_count) //Don't toggle if at 100%
+      if(vvt2_pwm_value < (long)vvt_pwm_max_count) //Don't toggle if at 100%
       {
         VVT1_PIN_OFF();
         vvt2_pwm_state = false;
