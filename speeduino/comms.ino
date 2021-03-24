@@ -1363,9 +1363,6 @@ void receiveValue(uint16_t valueOffset, byte newValue)
       dwellTable.cacheIsValid = false; //Invalid the tables cache to ensure a lookup of new values
       break;
       
-    default:
-      break;
-      
     case progOutsPage:
       pnt_configPage = &configPage13;
       //For some reason, TunerStudio is sending offsets greater than the maximum page size. I'm not sure if it's their bug or mine, but the fix is to only update the config page if the offset is less than the maximum size
@@ -1375,6 +1372,9 @@ void receiveValue(uint16_t valueOffset, byte newValue)
       }
       break;
 
+    default:
+      break;
+      
     case ignMap2Page: //Ignition settings page (Page 2)
       if (valueOffset < 256) //New value is part of the ignition map
       {
