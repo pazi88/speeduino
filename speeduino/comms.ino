@@ -1374,7 +1374,7 @@ void receiveValue(uint16_t valueOffset, byte newValue)
 
     default:
       break;
-      
+    
     case ignMap2Page: //Ignition settings page (Page 2)
       if (valueOffset < 256) //New value is part of the ignition map
       {
