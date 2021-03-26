@@ -137,9 +137,15 @@ volatile byte toothHistorySerialIndex = 0;
 unsigned long currentLoopTime; /**< The time (in uS) that the current mainloop started */
 unsigned long previousLoopTime; /**< The time (in uS) that the previous mainloop started */
 volatile uint16_t ignitionCount; /**< The count of ignition events that have taken place since the engine started */
-byte primaryTriggerEdge;
-byte secondaryTriggerEdge;
-byte tertiaryTriggerEdge;
+#if defined(CORE_SAMD21)
+  PinStatus primaryTriggerEdge;
+  PinStatus secondaryTriggerEdge;
+  PinStatus tertiaryTriggerEdge;
+#else
+  byte primaryTriggerEdge;
+  byte secondaryTriggerEdge;
+  byte tertiaryTriggerEdge;
+#endif
 int CRANK_ANGLE_MAX = 720;
 int CRANK_ANGLE_MAX_IGN = 360;
 int CRANK_ANGLE_MAX_INJ = 360; //The number of crank degrees that the system track over. 360 for wasted / timed batch and 720 for sequential
