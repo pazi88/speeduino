@@ -289,9 +289,7 @@ void vvtControl()
       {
         //This is dumb, but need to convert the current angle into a long pointer.
         vvt_pid_target_angle = (unsigned long)currentStatus.vvt1TargetAngle;
-        //vvt_pid_current_angle = (long)currentStatus.vvt1Angle;
-        if ( currentStatus.vvt1Angle > 1 ) { vvt_pid_current_angle = (long)currentStatus.vvt1Angle; }
-        else { vvt_pid_current_angle = 1; } //PID library doesn't like input values that are zero or negative. So values are limited to minimum that still works (0.5 degrees). 
+        vvt_pid_current_angle = (long)currentStatus.vvt1Angle;
 
         //If not already at target angle, calculate new value from PID
         bool PID_compute = vvtPID.Compute(true);
@@ -329,9 +327,7 @@ void vvtControl()
         {
           //This is dumb, but need to convert the current angle into a long pointer.
           vvt2_pid_target_angle = (unsigned long)currentStatus.vvt2TargetAngle;
-          //vvt2_pid_current_angle = (long)currentStatus.vvt2Angle;
-          if ( currentStatus.vvt2Angle > 1 ) { vvt2_pid_current_angle = (long)currentStatus.vvt2Angle; }
-          else { vvt2_pid_current_angle = 1; } //PID library doesn't like input values that are zero or negative. So values are limited to minimum that still works (0.5 degrees). 
+          vvt2_pid_current_angle = (long)currentStatus.vvt2Angle;
           //If not already at target angle, calculate new value from PID
           bool PID_compute = vvt2PID.Compute(true);
           if(PID_compute == true) { vvt2_pwm_value = halfpercentage(currentStatus.vvt2Duty, vvt_pwm_max_count); }
