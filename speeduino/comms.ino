@@ -181,7 +181,9 @@ void command()
       break;
 
     case 'L': // List the contents of current page in human readable form
+      #ifndef SMALL_FLASH_MODE
       sendPageASCII();
+      #endif
       break;
 
     case 'm': //Send the current free memory
@@ -258,7 +260,7 @@ void command()
       break;
 
     case 'Q': // send code version
-      Serial.print(F("speeduino 202101-dev"));
+      Serial.print(F("speeduino 202104-dev"));
       break;
 
     case 'r': //New format for the optimised OutputChannels
@@ -418,7 +420,7 @@ void command()
       break;
 
     case 'S': // send code version
-      Serial.print(F("Speeduino 2021.01-dev"));
+      Serial.print(F("Speeduino 2021.04-dev"));
       currentStatus.secl = 0; //This is required in TS3 due to its stricter timings
       break;
 

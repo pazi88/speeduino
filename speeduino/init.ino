@@ -1470,6 +1470,7 @@ void setPinMapping(byte boardID)
       break;
 
     case 6:
+      #ifndef SMALL_FLASH_MODE
       //Pin mappings as per the 2001-05 MX5 PNP shield
       pinInjector1 = 44; //Output pin injector 1 is on
       pinInjector2 = 46; //Output pin injector 2 is on
@@ -1504,7 +1505,7 @@ void setPinMapping(byte boardID)
       pinLaunch = 12; //Can be overwritten below
       pinFlex = 3; // Flex sensor (Must be external interrupt enabled)
       pinResetControl = 39; //Reset control output
-
+      #endif
       //This is NOT correct. It has not yet been tested with this board
       #if defined(CORE_TEENSY35)
         pinTrigger = 23;
@@ -1522,6 +1523,7 @@ void setPinMapping(byte boardID)
       break;
 
     case 8:
+      #ifndef SMALL_FLASH_MODE
       //Pin mappings as per the 1996-97 MX5 PNP shield
       pinInjector1 = 11; //Output pin injector 1 is on
       pinInjector2 = 10; //Output pin injector 2 is on
@@ -1569,9 +1571,11 @@ void setPinMapping(byte boardID)
         pinFan = 50; //Won't work (No mapping for pin 35)
         pinTachOut = 28; //Done
       #endif
+      #endif
       break;
 
     case 9:
+     #ifndef SMALL_FLASH_MODE
       //Pin mappings as per the 89-95 MX5 PNP shield
       pinInjector1 = 11; //Output pin injector 1 is on
       pinInjector2 = 10; //Output pin injector 2 is on
@@ -1604,7 +1608,7 @@ void setPinMapping(byte boardID)
       pinFlex = 3; // Flex sensor (Must be external interrupt enabled)
       pinResetControl = 44; //Reset control output
       pinVSS = 20;
-
+      #endif
       #if defined(CORE_TEENSY35)
         pinTrigger = 23;
         pinTrigger2 = 36;
@@ -1736,6 +1740,7 @@ void setPinMapping(byte boardID)
       break;
 
     case 31:
+     #ifndef SMALL_FLASH_MODE
       //Pin mappings for the BMW PnP PCBs by pazi88. This is an AVR only module. At least for now
       pinInjector1 = 8; //Output pin injector 1
       pinInjector2 = 9; //Output pin injector 2
@@ -1774,9 +1779,11 @@ void setPinMapping(byte boardID)
       pinFlex = 2; // Flex sensor
       pinResetControl = 43; //Reset control output
       pinVSS = 3; //VSS input pin
+      #endif
       break;
 
     case 40:
+     #ifndef SMALL_FLASH_MODE
       //Pin mappings as per the NO2C shield
       pinInjector1 = 8; //Output pin injector 1 is on
       pinInjector2 = 9; //Output pin injector 2 is on
@@ -1816,6 +1823,7 @@ void setPinMapping(byte boardID)
       pinSpareLOut2 = 34; //low current output spare2 - ONLY WITH DB
       pinSpareLOut3 = 36; //low current output spare3 - ONLY WITH DB
       pinResetControl = 26; //Reset control output
+      #endif
       break;
 
     case 41:
@@ -2212,7 +2220,39 @@ void setPinMapping(byte boardID)
         pinInjector8 = PE13; //
         pinInjector7 = PE14; //
         // = PE15;  //
-       
+     #elif (defined(STM32F411xE) || defined(STM32F401xC))
+        //@VitroBoss please define the pinsout here
+        pinInjector1 = PB7; //Output pin injector 1 is on
+        pinInjector2 = PB6; //Output pin injector 2 is on
+        pinInjector3 = PB5; //Output pin injector 3 is on
+        pinInjector4 = PB4; //Output pin injector 4 is on
+        pinCoil1 = PB9; //Pin for coil 1
+        pinCoil2 = PB8; //Pin for coil 2
+        pinCoil3 = PB3; //Pin for coil 3
+        pinCoil4 = PA15; //Pin for coil 4
+        pinTPS = A2;//TPS input pin
+        pinMAP = A3; //MAP sensor pin
+        pinIAT = A0; //IAT sensor pin
+        pinCLT = A1; //CLS sensor pin
+        pinO2 = A8; //O2 Sensor pin
+        pinBat = A4; //Battery reference voltage pin
+        pinBaro = pinMAP;
+        pinTachOut = PB1; //Tacho output pin  (Goes to ULN2803)
+        pinIdle1 = PB2; //Single wire idle control
+        pinIdle2 = PB10; //2 wire idle control
+        pinBoost = PA6; //Boost control
+        pinVVT_1 = NC; //Default VVT output
+        pinVVT_2 = NC; //Default VVT2 output
+        pinStepperDir = PB10; //Direction pin  for DRV8825 driver
+        pinStepperStep = PB2; //Step pin for DRV8825 driver
+        pinFuelPump = PA8; //Fuel pump output
+        pinFan = PA5; //Pin for the fan output (Goes to ULN2803)
+
+        //external interrupt enabled pins
+        pinFlex = PC14; // Flex sensor (Must be external interrupt enabled)
+        pinTrigger = PC13; //The CAS pin also led pin so bad idea
+        pinTrigger2 = PC15; //The Cam Sensor pin
+
      #elif defined(CORE_STM32)
         //blue pill wiki.stm32duino.com/index.php?title=Blue_Pill
         //Maple mini wiki.stm32duino.com/index.php?title=Maple_Mini
@@ -2397,7 +2437,6 @@ void setPinMapping(byte boardID)
       #endif  
       break;
   }
-  
 
   //Setup any devices that are using selectable pins
 
@@ -2408,13 +2447,13 @@ void setPinMapping(byte boardID)
   if ( (configPage6.fanPin != 0) && (configPage6.fanPin < BOARD_MAX_IO_PINS) ) { pinFan = pinTranslate(configPage6.fanPin); }
   if ( (configPage6.boostPin != 0) && (configPage6.boostPin < BOARD_MAX_IO_PINS) ) { pinBoost = pinTranslate(configPage6.boostPin); }
   if ( (configPage6.vvt1Pin != 0) && (configPage6.vvt1Pin < BOARD_MAX_IO_PINS) ) { pinVVT_1 = pinTranslate(configPage6.vvt1Pin); }
-  if ( (configPage6.useExtBaro != 0) && (configPage6.baroPin < BOARD_MAX_IO_PINS) ) { pinBaro = configPage6.baroPin + A0; }
-  if ( (configPage6.useEMAP != 0) && (configPage10.EMAPPin < BOARD_MAX_IO_PINS) ) { pinEMAP = configPage10.EMAPPin + A0; }
+  if ( (configPage6.useExtBaro != 0) && (configPage6.baroPin < BOARD_MAX_IO_PINS) ) { pinBaro = pinTranslateAnalog(configPage6.baroPin); }
+  if ( (configPage6.useEMAP != 0) && (configPage10.EMAPPin < BOARD_MAX_IO_PINS) ) { pinEMAP = pinTranslateAnalog(configPage10.EMAPPin); }
   if ( (configPage10.fuel2InputPin != 0) && (configPage10.fuel2InputPin < BOARD_MAX_IO_PINS) ) { pinFuel2Input = pinTranslate(configPage10.fuel2InputPin); }
   if ( (configPage10.spark2InputPin != 0) && (configPage10.spark2InputPin < BOARD_MAX_IO_PINS) ) { pinSpark2Input = pinTranslate(configPage10.spark2InputPin); }
   if ( (configPage2.vssPin != 0) && (configPage2.vssPin < BOARD_MAX_IO_PINS) ) { pinVSS = pinTranslate(configPage2.vssPin); }
-  if ( (configPage10.fuelPressurePin != 0) && (configPage10.fuelPressurePin < BOARD_MAX_IO_PINS) ) { pinFuelPressure = configPage10.fuelPressurePin + A0; }
-  if ( (configPage10.oilPressurePin != 0) && (configPage10.oilPressurePin < BOARD_MAX_IO_PINS) ) { pinOilPressure = configPage10.oilPressurePin + A0; }
+  if ( (configPage10.fuelPressureEnable) && (configPage10.fuelPressurePin < BOARD_MAX_IO_PINS) ) { pinFuelPressure = pinTranslateAnalog(configPage10.fuelPressurePin); }
+  if ( (configPage10.oilPressureEnable) && (configPage10.oilPressurePin < BOARD_MAX_IO_PINS) ) { pinOilPressure = pinTranslateAnalog(configPage10.oilPressurePin); }
   
   if ( (configPage10.wmiEmptyPin != 0) && (configPage10.wmiEmptyPin < BOARD_MAX_IO_PINS) ) { pinWMIEmpty = pinTranslate(configPage10.wmiEmptyPin); }
   if ( (configPage10.wmiIndicatorPin != 0) && (configPage10.wmiIndicatorPin < BOARD_MAX_IO_PINS) ) { pinWMIIndicator = pinTranslate(configPage10.wmiIndicatorPin); }

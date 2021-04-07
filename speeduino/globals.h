@@ -8,6 +8,7 @@
 #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__) || defined(__AVR_ATmega2561__)
   #define BOARD_MAX_DIGITAL_PINS 54 //digital pins +1
   #define BOARD_MAX_IO_PINS 70 //digital pins + analog channels + 1
+  #define BOARD_MAX_ADC_PINS  15 //Number of analog pins
 #ifndef LED_BUILTIN
   #define LED_BUILTIN 13
 #endif
@@ -36,15 +37,18 @@
     #define CORE_TEENSY35
     #define BOARD_H "board_teensy35.h"
     #define SD_LOGGING //SD logging enabled by default for Teensy 3.5 as it has the slot built in
+    #define BOARD_MAX_ADC_PINS  22 //Number of analog pins
   #elif defined(__IMXRT1062__)
     #define CORE_TEENSY41
     #define BOARD_H "board_teensy41.h"
+    #define BOARD_MAX_ADC_PINS  17 //Number of analog pins
   #endif
   #define INJ_CHANNELS 8
   #define IGN_CHANNELS 8
 
 #elif defined(STM32_MCU_SERIES) || defined(ARDUINO_ARCH_STM32) || defined(STM32)
   #define CORE_STM32
+  #define BOARD_MAX_ADC_PINS  15 //Number of analog pins. THIS NEEDS CONFIRMING FOR STM32!
   #if defined(STM32F407xx) //F407 can do 8x8 STM32F401/STM32F411 not
    #define INJ_CHANNELS 8
    #define IGN_CHANNELS 8
@@ -101,9 +105,19 @@
 #elif defined(__SAMD21G18A__)
   #define BOARD_H "board_samd21.h"
   #define CORE_SAMD21
+  #define CORE_SAM
+  #define INJ_CHANNELS 4
+  #define IGN_CHANNELS 4
 #elif defined(__SAMC21J18A__)
   #define BOARD_H "board_samc21.h"
   #define CORE_SAMC21
+  #define CORE_SAM
+#elif defined(__SAME51J19A__)
+  #define BOARD_H "board_same51.h"
+  #define CORE_SAME51
+  #define CORE_SAM
+  #define INJ_CHANNELS 8
+  #define IGN_CHANNELS 8
 #else
   #error Incorrect board selected. Please select the correct board (Usually Mega 2560) and upload again
 #endif
@@ -507,8 +521,14 @@ extern volatile byte toothHistorySerialIndex;
 extern unsigned long currentLoopTime; /**< The time (in uS) that the current mainloop started */
 extern unsigned long previousLoopTime; /**< The time (in uS) that the previous mainloop started */
 extern volatile uint16_t ignitionCount; /**< The count of ignition events that have taken place since the engine started */
-extern byte primaryTriggerEdge;
-extern byte secondaryTriggerEdge;
+//The below shouldn't be needed and probably should be cleaned up, but the Atmel SAM boards use a specific type for the trigger edge values rather than a simple byte/int
+#if defined(CORE_SAMD21)
+  extern PinStatus primaryTriggerEdge;
+  extern PinStatus secondaryTriggerEdge;
+#else
+  extern byte primaryTriggerEdge;
+  extern byte secondaryTriggerEdge;
+#endif
 extern int CRANK_ANGLE_MAX;
 extern int CRANK_ANGLE_MAX_IGN;
 extern int CRANK_ANGLE_MAX_INJ; //The number of crank degrees that the system track over. 360 for wasted / timed batch and 720 for sequential
@@ -627,7 +647,7 @@ struct statuses {
   int16_t ignLoad;
   int16_t ignLoad2;
   bool fuelPumpOn; /**< Indicator showing the current status of the fuel pump */
-  byte syncLossCounter;
+  volatile byte syncLossCounter;
   byte knockRetard;
   bool knockActive;
   bool toothLogEnabled;
@@ -1203,11 +1223,11 @@ struct config10 {
   byte fuelPressureEnable : 1;
   byte oilPressureEnable : 1;
   byte oilPressureProtEnbl : 1;
-  byte unused10_135 : 5;
+  byte oilPressurePin : 5;
 
-  byte fuelPressurePin : 4;
-  byte oilPressurePin : 4;
-
+  byte fuelPressurePin : 5;
+  byte unused11_165 : 3;
+  
   int8_t fuelPressureMin;
   byte fuelPressureMax;
   int8_t oilPressureMin;
