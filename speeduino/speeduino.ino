@@ -250,6 +250,7 @@ void loop()
     if(BIT_CHECK(LOOP_TIMER, BIT_TIMER_10HZ)) //10 hertz
     {
       BIT_CLEAR(TIMER_mask, BIT_TIMER_10HZ);
+      readCLT();
       //updateFullStatus();
       checkProgrammableIO();
     }
@@ -268,26 +269,49 @@ void loop()
       #if TPS_READ_FREQUENCY == 30
         readTPS();
       #endif
+      currentStatus.vss = getSpeed();
+      currentStatus.gear = getGear();
 
       if(eepromWritesPending == true) { writeAllConfig(); } //Check for any outstanding EEPROM writes.
     }
     if (BIT_CHECK(LOOP_TIMER, BIT_TIMER_4HZ))
     {
       BIT_CLEAR(TIMER_mask, BIT_TIMER_4HZ);
-      //The IAT and CLT readings can be done less frequently (4 times per second)
-      readCLT();
-      readIAT();
-      readO2();
-      readO2_2();
-      readBat();
       nitrousControl();
       idleControl(); //Perform any idle related actions. Even at higher frequencies, running 4x per second is sufficient.
       
-      currentStatus.vss = getSpeed();
-      currentStatus.gear = getGear();
+    } //4Hz timer
+    if (BIT_CHECK(LOOP_TIMER, BIT_TIMER_1HZ)) //Once per second)
+    {
+      BIT_CLEAR(TIMER_mask, BIT_TIMER_1HZ);
+      readBaro(); //Infrequent baro readings are not an issue.
+
+      if ( (configPage10.wmiEnabled > 0) && (configPage10.wmiIndicatorEnabled > 0) )
+      {
+        // water tank empty
+        if (currentStatus.wmiEmpty > 0)
+        {
+          // flash with 1sec inverval
+          digitalWrite(pinWMIIndicator, !digitalRead(pinWMIIndicator));
+        }
+        else
+        {
+          digitalWrite(pinWMIIndicator, configPage10.wmiIndicatorPolarity ? HIGH : LOW);
+        } 
+      }
+
+    } //1Hz timer
+
+    if(BIT_CHECK(LOOP_TIMER, BIT_TIMER_50HZ)) //50 hertz
+    {
+      BIT_CLEAR(TIMER_mask, BIT_TIMER_50HZ);
+      readIAT();
+      readBat();
+      #if TPS_READ_FREQUENCY == 50
+        readTPS();
+      #endif
       currentStatus.fuelPressure = getFuelPressure();
       currentStatus.oilPressure = getOilPressure();
-
       if(auxIsEnabled == true)
       {
         //TODO dazq to clean this right up :)
@@ -344,27 +368,17 @@ void loop()
           } //Channel type
         } //For loop going through each channel
       } //aux channels are enabled
-    } //4Hz timer
-    if (BIT_CHECK(LOOP_TIMER, BIT_TIMER_1HZ)) //Once per second)
+    }  //50Hz timer
+
+    if(BIT_CHECK(LOOP_TIMER, BIT_TIMER_100HZ)) //100 hertz
     {
-      BIT_CLEAR(TIMER_mask, BIT_TIMER_1HZ);
-      readBaro(); //Infrequent baro readings are not an issue.
-
-      if ( (configPage10.wmiEnabled > 0) && (configPage10.wmiIndicatorEnabled > 0) )
-      {
-        // water tank empty
-        if (currentStatus.wmiEmpty > 0)
-        {
-          // flash with 1sec inverval
-          digitalWrite(pinWMIIndicator, !digitalRead(pinWMIIndicator));
-        }
-        else
-        {
-          digitalWrite(pinWMIIndicator, configPage10.wmiIndicatorPolarity ? HIGH : LOW);
-        } 
-      }
-
-    } //1Hz timer
+      BIT_CLEAR(TIMER_mask, BIT_TIMER_100HZ);
+      readO2();
+      readO2_2();
+      #if TPS_READ_FREQUENCY == 100
+        readTPS();
+      #endif
+    }  //100Hz timer
 
     if( (configPage6.iacAlgorithm == IAC_ALGORITHM_STEP_OL) || (configPage6.iacAlgorithm == IAC_ALGORITHM_STEP_CL) )  { idleControl(); } //Run idlecontrol every loop for stepper idle.
 
