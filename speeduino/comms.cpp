@@ -914,6 +914,14 @@ byte getStatusEntry(uint16_t byteNum)
     case 116: statusValue = currentStatus.advance1; break; //advance 1 (%)
     case 117: statusValue = currentStatus.advance2; break; //advance 2 (%)
     case 118: statusValue = currentStatus.TS_SD_Status; break; //SD card status
+    case 119: statusValue = lowByte(currentStatus.DBWduty); break; //2 bytes for DBWduty
+    case 120: statusValue = highByte(currentStatus.DBWduty); break;
+    case 121: statusValue = lowByte(currentStatus.TPS2); break; //2 bytes for TPS2
+    case 122: statusValue = highByte(currentStatus.TPS2); break;
+    case 123: statusValue = lowByte(currentStatus.Pedal); break; //2 bytes for Pedal
+    case 124: statusValue = highByte(currentStatus.Pedal); break;
+    case 125: statusValue = lowByte(currentStatus.Pedal2); break; //2 bytes for Pedal2
+    case 126: statusValue = highByte(currentStatus.Pedal2); break;
   }
 
   return statusValue;
