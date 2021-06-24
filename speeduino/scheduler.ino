@@ -3,7 +3,27 @@ Speeduino - Simple engine management for the Arduino Mega 2560 platform
 Copyright (C) Josh Stewart
 A full copy of the license may be found in the projects root directory
 */
-
+/** @file
+ * Injector and Ignition (on/off) scheduling (functions).
+ * There is usually 8 functions for cylinders 1-8 with same naming pattern.
+ * 
+ * ## Scheduling structures
+ * 
+ * Structures @ref FuelSchedule and @ref Schedule describe (from scheduler.h) describe the scheduling info for Fuel and Ignition respectively.
+ * They contain duration, current activity status, start timing, end timing, callbacks to carry out action, etc.
+ * 
+ * ## Scheduling Functions
+ * 
+ * For Injection:
+ * - setFuelSchedule*(tout,dur) - **Setup** schedule for (next) injection on the channel
+ * - inj*StartFunction() - Execute **start** of injection (Interrupt handler)
+ * - inj*EndFunction() - Execute **end** of injection (interrupt handler)
+ * 
+ * For Ignition (has more complex schedule setup):
+ * - setIgnitionSchedule*(cb_st,tout,dur,cb_end) - **Setup** schedule for (next) ignition on the channel
+ * - ign*StartFunction() - Execute **start** of ignition (Interrupt handler)
+ * - ign*EndFunction() - Execute **end** of ignition (Interrupt handler)
+ */
 #include "globals.h"
 #include "scheduler.h"
 #include "scheduledIO.h"
@@ -757,10 +777,12 @@ void setIgnitionSchedule8(void (*startCallback)(), unsigned long timeout, unsign
     }
   }
 }
-
+/** Perform the injector priming pulses.
+ * Set these to run at an arbitrary time in the future (100us).
+ * The prime pulse value is in ms*10, so need to multiple by 100 to get to uS
+ */
 extern void beginInjectorPriming()
 {
-  //Perform the injector priming pulses. Set these to run at an arbitrary time in the future (100us). The prime pulse value is in ms*10, so need to multiple by 100 to get to uS
   unsigned long primingValue = table2D_getValue(&PrimingPulseTable, currentStatus.coolant + CALIBRATION_TEMPERATURE_OFFSET);
   if( (primingValue > 0) && (currentStatus.TPS < configPage4.floodClear) )
   {
@@ -791,9 +813,12 @@ extern void beginInjectorPriming()
 }
 
 /*******************************************************************************************************************************************************************************************************/
-//This function (All 8 ISR functions that are below) gets called when either the start time or the duration time are reached
-//This calls the relevant callback function (startCallback or endCallback) depending on the status of the schedule.
-//If the startCallback function is called, we put the scheduler into RUNNING state
+/** fuelSchedule*Interrupt (All 8 ISR functions below) get called (as timed interrupts) when either the start time or the duration time are reached.
+* This calls the relevant callback function (startCallback or endCallback) depending on the status (PENDING => Needs to run, RUNNING => Needs to stop) of the schedule.
+* The status of schedule is managed here based on startCallback /endCallback function called:
+* - startCallback - change scheduler into RUNNING state
+* - endCallback - change scheduler into OFF state (or PENDING if schedule.hasNextSchedule is set)
+*/
 //Timer3A (fuel schedule 1) Compare Vector
 #if (INJ_CHANNELS >= 1)
 #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__) || defined(__AVR_ATmega2561__) //AVR chips use the ISR for this
@@ -1210,7 +1235,8 @@ static inline void ignitionSchedule4Interrupt() //Most ARM chips can simply call
       ignitionSchedule4.StartCallback();
       ignitionSchedule4.Status = RUNNING; //Set the status to be in progress (ie The start callback has been called, but not the end callback)
       ignitionSchedule4.startTime = micros();
-      IGN4_COMPARE = (uint16_t)(IGN4_COUNTER + uS_TO_TIMER_COMPARE(ignitionSchedule4.duration)); //Doing this here prevents a potential overflow on restarts
+      if(ignitionSchedule4.endScheduleSetByDecoder == true) { IGN4_COMPARE = (uint16_t)ignitionSchedule4.endCompare; } //If the decoder has set the end compare value, assign it to the next compare
+      else { IGN4_COMPARE = (uint16_t)(IGN4_COUNTER + uS_TO_TIMER_COMPARE(ignitionSchedule4.duration)); } //If the decoder based timing isn't set, doing this here prevents a potential overflow tha
     }
     else if (ignitionSchedule4.Status == RUNNING)
     {
@@ -1250,7 +1276,8 @@ static inline void ignitionSchedule5Interrupt() //Most ARM chips can simply call
       ignitionSchedule5.StartCallback();
       ignitionSchedule5.Status = RUNNING; //Set the status to be in progress (ie The start callback has been called, but not the end callback)
       ignitionSchedule5.startTime = micros();
-      IGN5_COMPARE = (uint16_t)(IGN5_COUNTER + uS_TO_TIMER_COMPARE(ignitionSchedule5.duration)); //Doing this here prevents a potential overflow on restarts
+      if(ignitionSchedule5.endScheduleSetByDecoder == true) { IGN5_COMPARE = (uint16_t)ignitionSchedule5.endCompare; } //If the decoder has set the end compare value, assign it to the next compare
+      else { IGN5_COMPARE = (uint16_t)(IGN5_COUNTER + uS_TO_TIMER_COMPARE(ignitionSchedule5.duration)); } //If the decoder based timing isn't set, doing this here prevents a potential overflow tha
     }
     else if (ignitionSchedule5.Status == RUNNING)
     {
@@ -1290,7 +1317,8 @@ static inline void ignitionSchedule6Interrupt() //Most ARM chips can simply call
       ignitionSchedule6.StartCallback();
       ignitionSchedule6.Status = RUNNING; //Set the status to be in progress (ie The start callback has been called, but not the end callback)
       ignitionSchedule6.startTime = micros();
-      IGN6_COMPARE = (uint16_t)(IGN6_COUNTER + uS_TO_TIMER_COMPARE(ignitionSchedule6.duration)); //Doing this here prevents a potential overflow on restarts
+      if(ignitionSchedule6.endScheduleSetByDecoder == true) { IGN6_COMPARE = (uint16_t)ignitionSchedule6.endCompare; } //If the decoder has set the end compare value, assign it to the next compare
+      else { IGN6_COMPARE = (uint16_t)(IGN6_COUNTER + uS_TO_TIMER_COMPARE(ignitionSchedule6.duration)); } //If the decoder based timing isn't set, doing this here prevents a potential overflow tha
     }
     else if (ignitionSchedule6.Status == RUNNING)
     {
@@ -1330,7 +1358,8 @@ static inline void ignitionSchedule7Interrupt() //Most ARM chips can simply call
       ignitionSchedule7.StartCallback();
       ignitionSchedule7.Status = RUNNING; //Set the status to be in progress (ie The start callback has been called, but not the end callback)
       ignitionSchedule7.startTime = micros();
-      IGN7_COMPARE = (uint16_t)(IGN7_COUNTER + uS_TO_TIMER_COMPARE(ignitionSchedule7.duration)); //Doing this here prevents a potential overflow on restarts
+      if(ignitionSchedule7.endScheduleSetByDecoder == true) { IGN7_COMPARE = (uint16_t)ignitionSchedule7.endCompare; } //If the decoder has set the end compare value, assign it to the next compare
+      else { IGN7_COMPARE = (uint16_t)(IGN7_COUNTER + uS_TO_TIMER_COMPARE(ignitionSchedule7.duration)); } //If the decoder based timing isn't set, doing this here prevents a potential overflow tha
     }
     else if (ignitionSchedule7.Status == RUNNING)
     {
@@ -1370,7 +1399,8 @@ static inline void ignitionSchedule8Interrupt() //Most ARM chips can simply call
       ignitionSchedule8.StartCallback();
       ignitionSchedule8.Status = RUNNING; //Set the status to be in progress (ie The start callback has been called, but not the end callback)
       ignitionSchedule8.startTime = micros();
-      IGN8_COMPARE = (uint16_t)(IGN8_COUNTER + uS_TO_TIMER_COMPARE(ignitionSchedule8.duration)); //Doing this here prevents a potential overflow on restarts
+      if(ignitionSchedule8.endScheduleSetByDecoder == true) { IGN8_COMPARE = (uint16_t)ignitionSchedule8.endCompare; } //If the decoder has set the end compare value, assign it to the next compare
+      else { IGN8_COMPARE = (uint16_t)(IGN8_COUNTER + uS_TO_TIMER_COMPARE(ignitionSchedule8.duration)); } //If the decoder based timing isn't set, doing this here prevents a potential overflow tha
     }
     else if (ignitionSchedule8.Status == RUNNING)
     {

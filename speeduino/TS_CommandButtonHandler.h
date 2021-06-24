@@ -61,6 +61,9 @@
 #define TS_CMD_PEDAL_MAX  34817
 #define TS_CMD_CAL_FLAP   34818
 
+#define TS_CMD_STM32_REBOOT     12800
+#define TS_CMD_STM32_BOOTLOADER 12801
+
 #define TS_CMD_VSS_60KMH  39168 //0x99x00
 #define TS_CMD_VSS_RATIO1 39169
 #define TS_CMD_VSS_RATIO2 39170
@@ -69,5 +72,5 @@
 #define TS_CMD_VSS_RATIO5 39173
 #define TS_CMD_VSS_RATIO6 39174
 
-
-void TS_CommandButtonsHandler(int);
+/* the maximum id number is 65,535 */
+void TS_CommandButtonsHandler(uint16_t);
