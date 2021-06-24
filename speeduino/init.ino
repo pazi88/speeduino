@@ -57,6 +57,8 @@ void initialiseAll()
     table3D_setSize(&ignitionTable, 16);
     table3D_setSize(&ignitionTable2, 16);
     table3D_setSize(&afrTable, 16);
+    table3D_setSize(&DBWdutyTable, 12);
+    table3D_setSize(&DBWtargetTable, 12);
     table3D_setSize(&stagingTable, 8);
     table3D_setSize(&boostTable, 8);
     table3D_setSize(&vvtTable, 8);

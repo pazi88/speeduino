@@ -26,6 +26,8 @@ struct table3D trim6Table; ///< 6x6 Fuel trim 6 map
 struct table3D trim7Table; ///< 6x6 Fuel trim 7 map
 struct table3D trim8Table; ///< 6x6 Fuel trim 8 map
 struct table3D dwellTable; ///< 4x4 Dwell map
+struct table3D DBWdutyTable; ///< 12x12 DBW duty map
+struct table3D DBWtargetTable; ///< 12x12 DBW target map
 struct table2D taeTable; ///< 4 bin TPS Acceleration Enrichment map (2D)
 struct table2D maeTable;
 struct table2D WUETable; ///< 10 bin Warm Up Enrichment map (2D)
@@ -260,6 +262,7 @@ struct config6 configPage6;
 struct config9 configPage9;
 struct config10 configPage10;
 struct config13 configPage13;
+struct config15 configPage15;
 
 //byte cltCalibrationTable[CALIBRATION_TABLE_SIZE]; /**< An array containing the coolant sensor calibration values */
 //byte iatCalibrationTable[CALIBRATION_TABLE_SIZE]; /**< An array containing the inlet air temperature sensor calibration values */

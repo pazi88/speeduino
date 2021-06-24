@@ -199,10 +199,25 @@ Current layout of EEPROM data (Version 3) is as follows (All sizes are in bytes)
 #define EEPROM_CONFIG8_MAP8   3151
 #define EEPROM_CONFIG8_XBINS8 3187
 #define EEPROM_CONFIG8_YBINS8 3193
+//DBW thingys
+#define EEPROM_CONFIG15_START  3200
+#define EEPROM_CONFIG15_END    3280
+#define EEPROM_CONFIG16_XSIZE  3281
+#define EEPROM_CONFIG16_YSIZE  3282
+#define EEPROM_CONFIG16_MAP    3283
+#define EEPROM_CONFIG16_XBINS  3427
+#define EEPROM_CONFIG16_YBINS  3439
+#define EEPROM_CONFIG16_END    3451
+#define EEPROM_CONFIG17_XSIZE  3452
+#define EEPROM_CONFIG17_YSIZE  3453
+#define EEPROM_CONFIG17_MAP    3454
+#define EEPROM_CONFIG17_XBINS  3598
+#define EEPROM_CONFIG17_YBINS  3610
+#define EEPROM_CONFIG17_END    3622
 
 
 //Calibration data is stored at the end of the EEPROM (This is in case any further calibration tables are needed as they are large blocks)
-#define EEPROM_PAGE_CRC32     3686 //Size of this is 4 * <number of pages> (CRC32 = 32 bits): 3742 - (14 * 4) = 3686
+#define EEPROM_PAGE_CRC32     3674 //Size of this is 4 * <number of pages> (CRC32 = 32 bits): 3742 - (17 * 4) = 3674
 #define EEPROM_LAST_BARO      3742 // 3743 - 1
 //New values using 2D tables
 #define EEPROM_CALIBRATION_O2   3743 //3839-96 +64

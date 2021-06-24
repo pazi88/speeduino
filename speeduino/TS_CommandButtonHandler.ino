@@ -348,15 +348,15 @@ void TS_CommandButtonsHandler(uint16_t buttonCommand)
 
     //DBW related calibrations
     case TS_CMD_PEDAL_MIN: 
-        configPage9.Pedal1Min = currentStatus.PedalADC;
-        configPage9.Pedal2Min = currentStatus.Pedal2ADC;
-        writeConfig(9); // Need to manually save the new config value as it will not trigger a burn in tunerStudio due to use of ControllerPriority
+        configPage15.Pedal1Min = currentStatus.PedalADC;
+        configPage15.Pedal2Min = currentStatus.Pedal2ADC;
+        writeConfig(15); // Need to manually save the new config value as it will not trigger a burn in tunerStudio due to use of ControllerPriority
       break;
 
     case TS_CMD_PEDAL_MAX:
-        configPage9.Pedal1Max = currentStatus.PedalADC;
-        configPage9.Pedal2Max = currentStatus.Pedal2ADC;
-        writeConfig(9); // Need to manually save the new config value as it will not trigger a burn in tunerStudio due to use of ControllerPriority
+        configPage15.Pedal1Max = currentStatus.PedalADC;
+        configPage15.Pedal2Max = currentStatus.Pedal2ADC;
+        writeConfig(15); // Need to manually save the new config value as it will not trigger a burn in tunerStudio due to use of ControllerPriority
       break;
 
     case TS_CMD_CAL_FLAP:

@@ -24,7 +24,7 @@
 //  2. Offset to intra-entity byte
 
 // Page sizes as defined in the .ini file
-constexpr const uint16_t ini_page_sizes[] = { 0, 128, 288, 288, 128, 288, 128, 240, 384, 192, 192, 288, 192, 128, 288 };
+constexpr const uint16_t ini_page_sizes[] = { 0, 128, 288, 288, 128, 288, 128, 240, 384, 192, 192, 288, 192, 128, 288, 80 ,168 ,168 };
 
 // What section of a 3D table the offset mapped to
 enum table3D_section_t { 
@@ -68,6 +68,7 @@ static inline void check_size() {
 
 // Precompute for performance
 #define TABLE16_SIZE TABLE_SIZE(16)
+#define TABLE12_SIZE TABLE_SIZE(12)
 #define TABLE8_SIZE TABLE_SIZE(8)
 #define TABLE6_SIZE TABLE_SIZE(6)
 #define TABLE4_SIZE TABLE_SIZE(4)
@@ -235,6 +236,21 @@ entity_t map_page_offset_to_entity_inline(uint8_t pageNumber, uint16_t offset)
       CHECK_RAW(offset, 0U, &configPage13, sizeof(configPage13), pageNumber)
       END_OF_PAGE(progOutsPage, sizeof(configPage13));
       break;      
+
+    case DBWPage: 
+      CHECK_RAW(offset, 0U, &configPage15, sizeof(configPage15), pageNumber)
+      END_OF_PAGE(DBWPage, sizeof(configPage15));
+      break;      
+
+    case DBWDutyPage:
+      CHECK_TABLE(offset, 0U, &DBWdutyTable, 12, pageNumber)
+      END_OF_PAGE(DBWDutyPage, TABLE12_SIZE);
+      break;
+
+    case DBWTargetPage:
+      CHECK_TABLE(offset, 0U, &DBWtargetTable, 12, pageNumber)
+      END_OF_PAGE(DBWTargetPage, TABLE12_SIZE);
+      break;
 
     default:
       abort(); // Unkown page number. Not a lot  we can do.

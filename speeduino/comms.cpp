@@ -1379,6 +1379,18 @@ void sendPageASCII()
 
     case warmupPage:
     case progOutsPage:
+    case DBWPage:
+
+    case DBWDutyPage:
+      Serial.println(F("\nDBW Duty Map"));
+      serial_print_3dtable(DBWdutyTable);
+      break;
+
+    case DBWTargetPage:
+      Serial.println(F("\nDBW Target Map"));
+      serial_print_3dtable(DBWtargetTable);
+      break;
+
     default:
     #ifndef SMALL_FLASH_MODE
         Serial.println(F("\nPage has not been implemented yet"));

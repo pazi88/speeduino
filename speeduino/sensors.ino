@@ -374,12 +374,12 @@ void readTPS(bool useFilter)
   //currentStatus.tpsADC = ADC_FILTER(tempTPS, 128, currentStatus.tpsADC);
   uint16_t tempADC = currentStatus.tpsADC; //The tempADC value is used in order to allow TunerStudio to recover and redo the TPS calibration if this somehow gets corrupted
 
-  if(configPage2.tpsMax > configPage2.tpsMin)
+  if(configPage15.tpsMax > configPage2.tpsMin)
   {
     //Check that the ADC values fall within the min and max ranges (Should always be the case, but noise can cause these to fluctuate outside the defined range).
     if (currentStatus.tpsADC < configPage2.tpsMin) { tempADC = configPage2.tpsMin; }
-    else if(currentStatus.tpsADC > configPage2.tpsMax) { tempADC = configPage2.tpsMax; }
-    currentStatus.TPS = map(tempADC, configPage2.tpsMin, configPage2.tpsMax, 0, 1000); //Take the raw TPS ADC value and convert it into a TPS% based on the calibrated values
+    else if(currentStatus.tpsADC > configPage15.tpsMax) { tempADC = configPage15.tpsMax; }
+    currentStatus.TPS = map(tempADC, configPage2.tpsMin, configPage15.tpsMax, 0, 1000); //Take the raw TPS ADC value and convert it into a TPS% based on the calibrated values
   }
   else
   {
@@ -387,7 +387,7 @@ void readTPS(bool useFilter)
     //In such a case, tpsMin will be greater then tpsMax and hence checks and mapping needs to be reversed
 
     tempADC = 255 - currentStatus.tpsADC; //Reverse the ADC values
-    uint16_t tempTPSMax = 255 - configPage2.tpsMax;
+    uint16_t tempTPSMax = 255 - configPage15.tpsMax;
     uint16_t tempTPSMin = 255 - configPage2.tpsMin;
 
     //All checks below are reversed from the standard case above
@@ -414,12 +414,12 @@ void readTPS2()
   currentStatus.tps2ADC = ADC_FILTER(tempTPS2, configPage4.ADCFILTER_TPS, currentStatus.tps2ADC);
   uint16_t tempADC = currentStatus.tps2ADC;
 
-  if(configPage9.tps2Max > configPage9.tps2Min)
+  if(configPage15.tps2Max > configPage15.tps2Min)
   {
     //Check that the ADC values fall within the min and max ranges (Should always be the case, but noise can cause these to fluctuate outside the defined range).
-    if (currentStatus.tps2ADC < configPage9.tps2Min) { tempADC = configPage9.tps2Min; }
-    else if(currentStatus.tps2ADC > configPage9.tps2Max) { tempADC = configPage9.tps2Max; }
-    currentStatus.TPS2 = map(tempADC, configPage9.tps2Min, configPage9.tps2Max, 0, 1000); //Take the raw TPS ADC value and convert it into a TPS% based on the calibrated values
+    if (currentStatus.tps2ADC < configPage15.tps2Min) { tempADC = configPage15.tps2Min; }
+    else if(currentStatus.tps2ADC > configPage15.tps2Max) { tempADC = configPage15.tps2Max; }
+    currentStatus.TPS2 = map(tempADC, configPage15.tps2Min, configPage15.tps2Max, 0, 1000); //Take the raw TPS ADC value and convert it into a TPS% based on the calibrated values
   }
   else
   {
@@ -427,8 +427,8 @@ void readTPS2()
     //In such a case, tpsMin will be greater then tpsMax and hence checks and mapping needs to be reversed
 
     tempADC = 1023 - currentStatus.tps2ADC; //Reverse the ADC values
-    uint16_t tempTPS2Max = 1023 - configPage9.tps2Max;
-    uint16_t tempTPS2Min = 1023 - configPage9.tps2Min;
+    uint16_t tempTPS2Max = 1023 - configPage15.tps2Max;
+    uint16_t tempTPS2Min = 1023 - configPage15.tps2Min;
 
     //All checks below are reversed from the standard case above
     if (tempADC > tempTPS2Max) { tempADC = tempTPS2Max; }
@@ -446,12 +446,12 @@ void readPedal1()
   currentStatus.PedalADC = ADC_FILTER(tempPedal, configPage4.ADCFILTER_TPS, currentStatus.PedalADC);
   uint16_t tempADC = currentStatus.PedalADC;
 
-  if(configPage9.Pedal1Max > configPage9.Pedal1Min)
+  if(configPage15.Pedal1Max > configPage15.Pedal1Min)
   {
     //Check that the ADC values fall within the min and max ranges (Should always be the case, but noise can cause these to fluctuate outside the defined range).
-    if (currentStatus.PedalADC < configPage9.Pedal1Min) { tempADC = configPage9.Pedal1Min; }
-    else if(currentStatus.PedalADC > configPage9.Pedal1Max) { tempADC = configPage9.Pedal1Max; }
-    currentStatus.Pedal = map(tempADC, configPage9.Pedal1Min, configPage9.Pedal1Max, 0, 1000); //Take the raw TPS ADC value and convert it into a TPS% based on the calibrated values
+    if (currentStatus.PedalADC < configPage15.Pedal1Min) { tempADC = configPage15.Pedal1Min; }
+    else if(currentStatus.PedalADC > configPage15.Pedal1Max) { tempADC = configPage15.Pedal1Max; }
+    currentStatus.Pedal = map(tempADC, configPage15.Pedal1Min, configPage15.Pedal1Max, 0, 1000); //Take the raw TPS ADC value and convert it into a TPS% based on the calibrated values
   }
   else
   {
@@ -459,8 +459,8 @@ void readPedal1()
     //In such a case, tpsMin will be greater then tpsMax and hence checks and mapping needs to be reversed
 
     tempADC = 1023 - currentStatus.PedalADC; //Reverse the ADC values
-    uint16_t tempPedal1Max = 1023 - configPage9.Pedal1Max;
-    uint16_t tempPedal1Min = 1023 - configPage9.Pedal1Min;
+    uint16_t tempPedal1Max = 1023 - configPage15.Pedal1Max;
+    uint16_t tempPedal1Min = 1023 - configPage15.Pedal1Min;
 
     //All checks below are reversed from the standard case above
     if (tempADC > tempPedal1Max) { tempADC = tempPedal1Max; }
@@ -478,12 +478,12 @@ void readPedal2()
   currentStatus.Pedal2ADC = ADC_FILTER(tempPedal2, configPage4.ADCFILTER_TPS, currentStatus.Pedal2ADC);
   uint16_t tempADC = currentStatus.Pedal2ADC;
 
-  if(configPage9.Pedal2Max > configPage9.Pedal2Min)
+  if(configPage15.Pedal2Max > configPage15.Pedal2Min)
   {
     //Check that the ADC values fall within the min and max ranges (Should always be the case, but noise can cause these to fluctuate outside the defined range).
-    if (currentStatus.Pedal2ADC < configPage9.Pedal2Min) { tempADC = configPage9.Pedal2Min; }
-    else if(currentStatus.Pedal2ADC > configPage9.Pedal2Max) { tempADC = configPage9.Pedal2Max; }
-    currentStatus.Pedal2 = map(tempADC, configPage9.Pedal2Min, configPage9.Pedal2Max, 0, 1000); //Take the raw TPS ADC value and convert it into a TPS% based on the calibrated values
+    if (currentStatus.Pedal2ADC < configPage15.Pedal2Min) { tempADC = configPage15.Pedal2Min; }
+    else if(currentStatus.Pedal2ADC > configPage15.Pedal2Max) { tempADC = configPage15.Pedal2Max; }
+    currentStatus.Pedal2 = map(tempADC, configPage15.Pedal2Min, configPage15.Pedal2Max, 0, 1000); //Take the raw TPS ADC value and convert it into a TPS% based on the calibrated values
   }
   else
   {
@@ -491,8 +491,8 @@ void readPedal2()
     //In such a case, tpsMin will be greater then tpsMax and hence checks and mapping needs to be reversed
 
     tempADC = 1023 - currentStatus.Pedal2ADC; //Reverse the ADC values
-    uint16_t tempPedal2Max = 1023 - configPage9.Pedal2Max;
-    uint16_t tempPedal2Min = 1023 - configPage9.Pedal2Min;
+    uint16_t tempPedal2Max = 1023 - configPage15.Pedal2Max;
+    uint16_t tempPedal2Min = 1023 - configPage15.Pedal2Min;
 
     //All checks below are reversed from the standard case above
     if (tempADC > tempPedal2Max) { tempADC = tempPedal2Max; }

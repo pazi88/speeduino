@@ -24,6 +24,8 @@ This file is used for everything related to maps/tables including their definiti
 #define TABLE_IGN1_SIZE     16;
 #define TABLE_IGN2_SIZE     16;
 #define TABLE_AFR_SIZE      16;
+#define TABLE_DBW_DUTY_SIZE 12;
+#define TABLE_DBW_TRGT_SIZE 12;
 #define TABLE_STAGING_SIZE  8;
 #define TABLE_BOOST_SIZE    8;
 #define TABLE_VVT1_SIZE     8;
@@ -43,7 +45,7 @@ This file is used for everything related to maps/tables including their definiti
 *********** WARNING! ***********
 YOU MUST UPDATE THE TABLE COUNTS IN THE LINE BELOW WHENEVER A NEW TABLE IS ADDED!
 */
-#define TABLE_HEAP_SIZE     ((5 * TABLE3D_SIZE_16) + (5 * TABLE3D_SIZE_8) + (8 * TABLE3D_SIZE_6) + (1 * TABLE3D_SIZE_4) + 1)
+#define TABLE_HEAP_SIZE     ((5 * TABLE3D_SIZE_16) + (2 * TABLE3D_SIZE_12) +(5 * TABLE3D_SIZE_8) + (8 * TABLE3D_SIZE_6) + (1 * TABLE3D_SIZE_4) + 1)
 
 
 /*

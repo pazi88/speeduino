@@ -7,7 +7,7 @@ this only works on STM32
 #include "sensors.h"
 #include "src/PID_v1/PID_v1.h"
 
-integerPID DBWPID(&currentStatus.TPS, &DBWPidDuty, &currentStatus.Pedal, configPage9.DBWKP, configPage9.DBWKI, configPage9.DBWKD, DIRECT);
+integerPID DBWPID(&currentStatus.TPS, &DBWPidDuty, &currentStatus.Pedal, configPage15.DBWKP, configPage15.DBWKI, configPage15.DBWKD, DIRECT);
 
 void initialiseDBW()
 {
@@ -21,7 +21,7 @@ void initialiseDBW()
   Timer10.setCaptureCompare(1, 0, RESOLUTION_12B_COMPARE_FORMAT); // Dutycycle: [0.. 4095]
   Timer10.resume();
   DBWPID.SetOutputLimits(0, 8190); //PID works with duty values from 0 to 8190. 0-4095 is backwards direction, 4096 - 8190 is forward direction
-  DBWPID.SetTunings(configPage9.DBWKP, configPage9.DBWKI, configPage9.DBWKD);
+  DBWPID.SetTunings(configPage15.DBWKP, configPage15.DBWKI, configPage15.DBWKD);
   DBWPID.SetSampleTime(33); //30Hz is 33,33ms
   DBWPID.SetMode(AUTOMATIC); //Turn PID on
   int CalTimer = 0;
@@ -42,7 +42,7 @@ void DBWControl()
       currentStatus.DBWduty = DBWPidDuty - 4095; //convert the duty from PID algorith to -4095 to 4095.
       if ( DBWPidDuty >= 4095 )  // Open the DBW
       {
-        if (configPage9.DBWdir == 0)
+        if (configPage15.DBWdir == 0)
         {
           //Normal direction
           *idle_pin_port |= (idle_pin_mask);  // Switch 1st direction pin to high
@@ -83,7 +83,7 @@ void DBWControl()
     {
         // Read ADC values when throttle flap is fully closed and store those as min values
         configPage2.tpsMin = analogRead(pinTPS);
-        configPage9.tps2Min = analogRead(pinTPS2);
+        configPage15.tps2Min = analogRead(pinTPS2);
     }
     else if ( CalTimer > 10 )
     {
@@ -92,8 +92,8 @@ void DBWControl()
     else if ( CalTimer == 20 )
     {
         // Read ADC values when throttle flap is fully open and store those as max values
-        configPage2.tpsMax = analogRead(pinTPS);
-        configPage9.tps2Max = analogRead(pinTPS2);
+        configPage15.tpsMax = analogRead(pinTPS);
+        configPage15.tps2Max = analogRead(pinTPS2);
         BIT_CLEAR(currentStatus.DBWstatus, BIT_DBWSTATUS_CAL_ONGOING); //calibration done
         writeConfig(2); // Need to manually save the new config value as it will not trigger a burn in tunerStudio due to use of ControllerPriority
         writeConfig(9);

@@ -441,6 +441,8 @@ extern struct table3D trim6Table; //6x6 Fuel trim 6 map
 extern struct table3D trim7Table; //6x6 Fuel trim 7 map
 extern struct table3D trim8Table; //6x6 Fuel trim 8 map
 extern struct table3D dwellTable; //4x4 Dwell map
+extern struct table3D DBWdutyTable; //12x12 DBW duty map
+extern struct table3D DBWtargetTable; //12x12 DBW target map
 extern struct table2D taeTable; //4 bin TPS Acceleration Enrichment map (2D)
 extern struct table2D maeTable;
 extern struct table2D WUETable; //10 bin Warm Up Enrichment map (2D)
@@ -1133,15 +1135,21 @@ struct config9 {
 
   byte iacMaxSteps; // Step limit beyond which the stepper won't be driven. Should always be less than homing steps. Stored div 3 as per home steps.
 
-  byte DBWKP;
-  byte DBWKI;
-  byte DBWKD;
-  uint16_t tps2Min;
-  uint16_t tps2Max;
-  uint16_t Pedal1Min;
-  uint16_t Pedal1Max;
-  uint16_t Pedal2Min;
-  uint16_t Pedal2Max;
+  byte unused10_155;
+  byte unused10_156;
+  byte unused10_157;
+  byte unused10_158;
+  byte unused10_159;
+  byte unused10_160;
+  byte unused10_161;
+  byte unused10_162;
+  byte unused10_163;
+  byte unused10_164;
+  byte unused10_165;
+  byte unused10_166;
+  byte unused10_167;
+  byte unused10_168;
+  byte unused10_169;
   byte unused10_170;
   byte unused10_171;
   byte unused10_172;
@@ -1392,6 +1400,18 @@ Page 15 - DBW stuff.
 */
 struct config15 {
   uint16_t tpsMax;
+  byte DBWKP;
+  byte DBWKI;
+  byte DBWKD;
+  uint16_t tps2Min;
+  uint16_t tps2Max;
+  uint16_t Pedal1Min;
+  uint16_t Pedal1Max;
+  uint16_t Pedal2Min;
+  uint16_t Pedal2Max;
+  byte DBWdir : 1;
+  byte DBWunusedbits : 7;
+  uint8_t unusedDBW[62]; // Unused
 #if defined(CORE_AVR)
   };
 #else
@@ -1495,6 +1515,7 @@ extern struct config6 configPage6;
 extern struct config9 configPage9;
 extern struct config10 configPage10;
 extern struct config13 configPage13;
+extern struct config15 configPage15;
 //extern byte cltCalibrationTable[CALIBRATION_TABLE_SIZE]; /**< An array containing the coolant sensor calibration values */
 //extern byte iatCalibrationTable[CALIBRATION_TABLE_SIZE]; /**< An array containing the inlet air temperature sensor calibration values */
 //extern byte o2CalibrationTable[CALIBRATION_TABLE_SIZE]; /**< An array containing the O2 sensor calibration values */

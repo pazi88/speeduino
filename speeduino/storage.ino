@@ -280,6 +280,38 @@ void writeConfig(byte tableNum)
       writeCounter = writeTable(&ignitionTable2, index, writeCounter);
       eepromWritesPending = writeCounter > EEPROM_MAX_WRITE_BLOCK;
       break;
+    
+    case DBWPage:
+      /*---------------------------------------------------
+      | Config page 15 (See storage.h for data layout)
+      | 80 byte long config table
+      -----------------------------------------------------*/
+      index = EEPROM_CONFIG15_START;
+      writeCounter = write_range(index, (byte *)&configPage15, (byte *)&configPage15+sizeof(configPage15), writeCounter);
+      eepromWritesPending = writeCounter > EEPROM_MAX_WRITE_BLOCK;
+      break;
+    
+    case DBWDutyPage:
+      /*---------------------------------------------------
+      | DBW Duty table (See storage.h for data layout)
+      | 12x12 table itself + the 12 values along each of the axis
+      -----------------------------------------------------*/
+      //Begin writing the Ignition table, basically the same thing as above
+      index = EEPROM_CONFIG16_XSIZE;
+      writeCounter = writeTable(&DBWdutyTable, index, writeCounter);
+      eepromWritesPending = writeCounter > EEPROM_MAX_WRITE_BLOCK;
+      break;
+    
+    case DBWTargetPage:
+      /*---------------------------------------------------
+      | DBW Target table (See storage.h for data layout)
+      | 12x12 table itself + the 12 values along each of the axis
+      -----------------------------------------------------*/
+      //Begin writing the Ignition table, basically the same thing as above
+      index = EEPROM_CONFIG17_XSIZE;
+      writeCounter = writeTable(&DBWtargetTable, index, writeCounter);
+      eepromWritesPending = writeCounter > EEPROM_MAX_WRITE_BLOCK;
+      break;
 
     default:
       break;
@@ -295,6 +327,7 @@ void resetConfigPages()
   memset(&configPage9, 0, sizeof(config9));
   memset(&configPage10, 0, sizeof(config10));
   memset(&configPage13, 0, sizeof(config13));
+  memset(&configPage15, 0, sizeof(config15));
 }
 
 namespace
@@ -418,6 +451,22 @@ void loadConfig()
 
   //Begin writing the Ignition table, basically the same thing as above
   loadTable(&ignitionTable2, EEPROM_CONFIG14_MAP);
+
+  //*********************************************************************************************************************************************************************************
+  //CONFIG PAGE (15)
+  load_range(EEPROM_CONFIG15_START, (byte *)&configPage15, (byte *)&configPage15+sizeof(configPage15));
+
+  //*********************************************************************************************************************************************************************************
+  // DBW Duty table load (16)
+
+  //Begin writing the Ignition table, basically the same thing as above
+  loadTable(&DBWdutyTable, EEPROM_CONFIG17_MAP);
+
+  //*********************************************************************************************************************************************************************************
+  // DBW Target table load (17)
+
+  //Begin writing the Ignition table, basically the same thing as above
+  loadTable(&DBWtargetTable, EEPROM_CONFIG17_MAP);
 
   //*********************************************************************************************************************************************************************************
 }
