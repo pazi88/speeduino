@@ -1,3 +1,6 @@
+/** @file
+ * Speeduino Initialization (called at Arduino setup()).
+ */
 #include "globals.h"
 #include "init.h"
 #include "storage.h"
@@ -22,7 +25,26 @@
   #include "rtc_common.h"
 #endif
 
-
+/** Initialize Speeduino for the main loop.
+ * Top level init entrypoint for all initializations:
+ * - Intialize and set sizes of 3D tables
+ * - Load config from EEPROM, update config structures to current version of SW if needed.
+ * - Initialize board (The initBoard() is for board X implemented in board_X.ino file)
+ * - Initialize timers (See timers.ino)
+ * - Perform optional SD card and RTC battery inits
+ * - Load calibrarion tables from EEPROM
+ * - Perform pin mapping (calling @ref setPinMapping() based on @ref config2.pinMapping)
+ * - Stop any coil charging and close injectors
+ * - Intialize schedulers, Idle, Fan, auxPWM, Corrections, AD-conversions, Programmable I/O
+ * - Intialize baro (ambient pressure) by reading MAP (before engine runs)
+ * - Intialize triggers (by @ref initialiseTriggers() )
+ * - Perform cyl. count based initializations (@ref config2.nCylinders)
+ * - Perform injection and spark mode based setup
+ *   - Assign injector open/close and coil charge begin/end functions to their dedicated global vars
+ * - Perform fuel pressure priming by turning fuel pump on
+ * - Read CLT and TPS sensors to have cranking pulsewidths computed correctly
+ * - Mark Initialization completed (this flag-marking is used in code to prevent after-init changes)
+ */
 void initialiseAll()
 {   
     fpPrimed = false;
@@ -246,7 +268,8 @@ void initialiseAll()
     }
     else { setPinMapping(configPage2.pinMapping); }
 
-    //Note: This must come after the call to setPinMapping() or else pins 29 and 30 will become unusable as outputs. Workaround for: https://github.com/tonton81/FlexCAN_T4/issues/14
+    /* Note: This must come after the call to setPinMapping() or else pins 29 and 30 will become unusable as outputs.
+     * Workaround for: https://github.com/tonton81/FlexCAN_T4/issues/14 */
     #if defined(CORE_TEENSY35)
       Can0.setRX(DEF);
       Can0.setTX(DEF);
@@ -1179,7 +1202,11 @@ void initialiseAll()
     initialisationComplete = true;
     digitalWrite(LED_BUILTIN, HIGH);
 }
-
+/** Set board / microcontroller specfic pin mappings / assignments.
+ * The boardID is switch-case compared against raw boardID integers (not enum or #define:d label, and probably no need for that either)
+ * which are originated from tuning SW (e.g. TS) set values and are avilable in reference/speeduino.ini (See pinLayout, note also that
+ * numbering is not contiguous here).
+ */
 void setPinMapping(byte boardID)
 {
   //Force set defaults. Will be overwritten below if needed.
@@ -1745,28 +1772,33 @@ void setPinMapping(byte boardID)
     #endif
       break;
 
-    case 31:
-     #ifndef SMALL_FLASH_MODE
-      //Pin mappings for the BMW PnP PCBs by pazi88. This is an AVR only module. At least for now
+   case 31:
+      //Pin mappings for the BMW PnP PCBs by pazi88.
+      #if defined(CORE_AVR)
+      //This is the regular MEGA2560 pin mapping
       pinInjector1 = 8; //Output pin injector 1
       pinInjector2 = 9; //Output pin injector 2
       pinInjector3 = 10; //Output pin injector 3
       pinInjector4 = 11; //Output pin injector 4
       pinInjector5 = 12; //Output pin injector 5
       pinInjector6 = 50; //Output pin injector 6
+      pinInjector7 = 39; //Output pin injector 7 (placeholder)
+      pinInjector8 = 42; //Output pin injector 8 (placeholder)
       pinCoil1 = 40; //Pin for coil 1
       pinCoil2 = 38; //Pin for coil 2
       pinCoil3 = 52; //Pin for coil 3
       pinCoil4 = 48; //Pin for coil 4
       pinCoil5 = 36; //Pin for coil 5
       pinCoil6 = 34; //Pin for coil 6
+      pinCoil7 = 46; //Pin for coil 7 (placeholder)
+      pinCoil8 = 53; //Pin for coil 8 (placeholder)
       pinTrigger = 19; //The CAS pin
       pinTrigger2 = 18; //The Cam Sensor pin
       pinTrigger3 = 20; //The Cam sensor 2 pin
       pinTPS = A2;//TPS input pin
       pinMAP = A3; //MAP sensor pin
       pinIAT = A0; //IAT sensor pin
-      pinCLT = A1; //CLS sensor pin
+      pinCLT = A1; //CLT sensor pin
       pinO2 = A8; //O2 Sensor pin
       pinBat = A4; //Battery reference voltage pin
       pinBaro = A5; //Baro sensor pin
@@ -1786,7 +1818,49 @@ void setPinMapping(byte boardID)
       pinFlex = 2; // Flex sensor
       pinResetControl = 43; //Reset control output
       pinVSS = 3; //VSS input pin
-      #endif
+     #elif defined(STM32F407xx)
+      pinInjector1 = PB15; //Output pin injector 1
+      pinInjector2 = PB14; //Output pin injector 2
+      pinInjector3 = PB12; //Output pin injector 3
+      pinInjector4 = PB13; //Output pin injector 4
+      pinInjector5 = PA8; //Output pin injector 5
+      pinInjector6 = PE7; //Output pin injector 6
+      pinInjector7 = PE13; //Output pin injector 7 (placeholder)
+      pinInjector8 = PE10; //Output pin injector 8 (placeholder)
+      pinCoil1 = PE2; //Pin for coil 1
+      pinCoil2 = PE3; //Pin for coil 2
+      pinCoil3 = PC13; //Pin for coil 3
+      pinCoil4 = PE6; //Pin for coil 4
+      pinCoil5 = PE4; //Pin for coil 5
+      pinCoil6 = PE5; //Pin for coil 6
+      pinCoil7 = PE0; //Pin for coil 7 (placeholder)
+      pinCoil8 = PB9; //Pin for coil 8 (placeholder)
+      pinTrigger = PD3; //The CAS pin
+      pinTrigger2 = PD4; //The Cam Sensor pin
+      pinTPS = PA2;//TPS input pin
+      pinMAP = PA3; //MAP sensor pin
+      pinIAT = PA0; //IAT sensor pin
+      pinCLT = PA1; //CLS sensor pin
+      pinO2 = PB0; //O2 Sensor pin
+      pinBat = PA4; //Battery reference voltage pin
+      pinBaro = PA5; //Baro sensor pin
+      pinDisplayReset = PE12; // OLED reset pin
+      pinTachOut = PE8; //Tacho output pin  (Goes to ULN2003)
+      pinIdle1 = PD10; //ICV pin1
+      pinIdle2 = PD9; //ICV pin3
+      pinBoost = PD8; //Boost control
+      pinVVT_1 = PD11; //VVT1 output (intake vanos)
+      pinVVT_2 = PC7; //VVT2 output (exhaust vanos)
+      pinFuelPump = PE11; //Fuel pump output  (Goes to ULN2003)
+      pinStepperDir = PB10; //Stepper valve isn't used with these
+      pinStepperStep = PB11; //Stepper valve isn't used with these
+      pinStepperEnable = PA15; //Stepper valve isn't used with these
+      pinFan = PE9; //Pin for the fan output (Goes to ULN2003)
+      pinLaunch = PB8; //Launch control pin
+      pinFlex = PD7; // Flex sensor
+      pinResetControl = PB7; //Reset control output
+      pinVSS = PB6; //VSS input pin
+     #endif
       break;
 
     case 40:
@@ -2695,7 +2769,12 @@ void setPinMapping(byte boardID)
   flex_pin_mask = digitalPinToBitMask(pinFlex);
 
 }
-
+/** Initialize the chosen trigger decoder.
+ * - Set Interrput numbers @ref triggerInterrupt, @ref triggerInterrupt2 and @ref triggerInterrupt3  by pin their numbers (based on board CORE_* define)
+ * - Call decoder specific setup function triggerSetup_*() (by @ref config4.TrigPattern, set to one of the DECODER_* defines) and do any additional initializations needed.
+ * 
+ * @todo Explain why triggerSetup_*() alone cannot do all the setup, but there's ~10+ lines worth of extra init for each of decoders.
+ */
 void initialiseTriggers()
 {
   byte triggerInterrupt = 0; // By default, use the first interrupt

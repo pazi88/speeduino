@@ -1,8 +1,12 @@
-/*
- * This routine is used for doing any data conversions that are required during firmware changes
+/** @file
+ * EEPROM Storage updates.
+ */
+/** Store and load various configs to/from EEPROM considering the the data format versions of various SW generations.
+ * This routine is used for doing any data conversions that are required during firmware changes.
  * This prevents users getting difference reports in TS when such a data change occurs.
- * It also can be used for setting good values when there are viarables that move locations in the ini
- * When a user skips multiple firmware versions at a time, this will roll through the updates 1 at a time
+ * It also can be used for setting good values when there are viarables that move locations in the ini.
+ * When a user skips multiple firmware versions at a time, this will roll through the updates 1 at a time.
+ * The doUpdates() uses may lower level routines from Arduino EEPROM library and storage.ino to carry out EEPROM storage tasks.
  */
 #include "globals.h"
 #include "storage.h"
@@ -487,6 +491,23 @@ void doUpdates()
     configPage10.vvtCLMaxAng = 200;
     configPage4.ANGLEFILTER_VVT = 0;
 
+    configPage2.IdleAdvDelay *= 2; //Increased resolution to 0.5 second
+    
+    //RPM switch point added for map sample method. Set to 0 to not affect existing tunes.
+    configPage2.mapSwitchPoint = 0;
+
+    configPage9.boostByGearEnabled = 0;
+
+    //Added possibility to set minimum programmable output time
+    configPage13.outputTimeLimit[0] = 0;
+    configPage13.outputTimeLimit[1] = 0;
+    configPage13.outputTimeLimit[2] = 0;
+    configPage13.outputTimeLimit[3] = 0;
+    configPage13.outputTimeLimit[4] = 0;
+    configPage13.outputTimeLimit[5] = 0;
+    configPage13.outputTimeLimit[6] = 0;
+    configPage13.outputTimeLimit[7] = 0;
+
     writeAllConfig();
     EEPROM.write(EEPROM_DATA_VERSION, 18);
   }
@@ -505,6 +526,8 @@ void doUpdates()
     configPage13.outputPin[5] = 0;
     configPage13.outputPin[6] = 0;
     configPage13.outputPin[7] = 0;
+
+    configPage4.FILTER_FLEX = 75;
 
     EEPROM.write(EEPROM_DATA_VERSION, CURRENT_DATA_VERSION);
   }
