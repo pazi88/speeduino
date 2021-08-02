@@ -15,7 +15,9 @@ volatile PINMASK_TYPE DBWdir_pin_mask;
 volatile PORT_TYPE *DBWdir2_pin_port;
 volatile PINMASK_TYPE DBWdir2_pin_mask;
 
-long DBWPidDuty;
+long DBWError;
+long DBWDutyModifier;
+long DBWErrorTarget; //this is abviously 0
 int CalTimer;
 void initialiseDBW();
 void DBWControl();

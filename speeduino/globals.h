@@ -725,6 +725,7 @@ struct statuses {
   long Pedal;
   long Pedal2;
   volatile byte DBWstatus;
+  uint16_t DBWTarget;
   uint16_t tps2ADC;
   uint16_t PedalADC;
   uint16_t Pedal2ADC;

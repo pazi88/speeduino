@@ -922,6 +922,8 @@ byte getStatusEntry(uint16_t byteNum)
     case 124: statusValue = highByte(currentStatus.Pedal); break;
     case 125: statusValue = lowByte(currentStatus.Pedal2); break; //2 bytes for Pedal2
     case 126: statusValue = highByte(currentStatus.Pedal2); break;
+    case 127: statusValue = lowByte(currentStatus.DBWTarget); break; //2 bytes for DBWTarget
+    case 128: statusValue = highByte(currentStatus.DBWTarget); break;
   }
 
   return statusValue;
