@@ -543,15 +543,24 @@ void triggerSec_missingTooth()
   } //Trigger filter
 
   //Record the VVT Angle
-  if( (configPage6.vvtEnabled > 0) && (revolutionOne == 1) )
+  if( configPage6.vvtEnabled > 0 )
   {
     int16_t curAngle;
     curAngle = getCrankAngle();
-    while(curAngle > 360) { curAngle -= 360; }
-    curAngle -= configPage4.triggerAngle; //Value at TDC
-    if( configPage6.vvtMode == VVT_MODE_CLOSED_LOOP ) { curAngle -= configPage10.vvtCL0DutyAng; }
-
-    currentStatus.vvt1Angle = ANGLE_FILTER( (curAngle << 1), configPage4.ANGLEFILTER_VVT, currentStatus.vvt1Angle);
+    if ( configPage4.trigPatternSec == SEC_TRIGGER_BOSCH )  // for "bosch quick start"
+    {
+      curAngle -= configPage4.triggerAngle; //Value at TDC
+      curAngle = curAngle - ( secondaryToothCount * 180 );
+	  if( configPage6.vvtMode == VVT_MODE_CLOSED_LOOP ) { curAngle -= configPage10.vvtCL0DutyAng; }  // when closed loop VVT is used, subtract the 0% duty cam angle value from curAngle
+      currentStatus.vvt1Angle = ANGLE_FILTER( (curAngle << 1), configPage4.ANGLEFILTER_VVT, currentStatus.vvt1Angle);
+    }
+    else if ( revolutionOne == 1 )  // for single tooth and 4-1
+    {
+      while(curAngle > 360) { curAngle -= 360; }
+      curAngle -= configPage4.triggerAngle; //Value at TDC
+      if( configPage6.vvtMode == VVT_MODE_CLOSED_LOOP ) { curAngle -= configPage10.vvtCL0DutyAng; }  // when closed loop VVT is used, subtract the 0% duty cam angle value from curAngle
+      currentStatus.vvt1Angle = ANGLE_FILTER( (curAngle << 1), configPage4.ANGLEFILTER_VVT, currentStatus.vvt1Angle);
+    }
   }
 }
 
