@@ -9,9 +9,6 @@
   extern HardwareSerial &CANSerial;
 #elif defined(CORE_STM32)
   #define CANSerial_AVAILABLE
-  #ifndef Serial2
-    #define Serial2 Serial1
-  #endif
   #if defined(STM32GENERIC) // STM32GENERIC core
     extern SerialUART &CANSerial;
   #else //libmaple core aka STM32DUINO

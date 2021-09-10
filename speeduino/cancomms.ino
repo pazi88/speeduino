@@ -36,9 +36,6 @@ bool canCmdPending = false;
   HardwareSerial &CANSerial = Serial3;
 #elif defined(CORE_STM32)
   #define CANSerial_AVAILABLE
-  #ifndef Serial2
-    #define Serial2 Serial1
-  #endif
   #if defined(STM32GENERIC) // STM32GENERIC core
     SerialUART &CANSerial = Serial2;
   #else //libmaple core aka STM32DUINO
