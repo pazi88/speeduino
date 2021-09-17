@@ -14,7 +14,7 @@
 
 void doUpdates()
 {
-  #define CURRENT_DATA_VERSION    18
+  #define CURRENT_DATA_VERSION    19
   //Only the latest updat for small flash devices must be retained
    #ifndef SMALL_FLASH_MODE
 
@@ -517,7 +517,7 @@ void doUpdates()
     configPage2.fanEnable = configPage6.fanUnused; // PWM Fan mode added, but take the previous setting of Fan in use.
 
     writeAllConfig();
-    EEPROM.write(EEPROM_DATA_VERSION, 18);
+    EEPROM.write(EEPROM_DATA_VERSION, 19);
   }
 
   //Final check is always for 255 and 0 (Brand new arduino)
