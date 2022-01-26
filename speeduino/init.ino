@@ -2866,8 +2866,16 @@ void initialiseTriggers()
       //Missing tooth decoder
       triggerSetup_missingTooth();
       triggerHandler = triggerPri_missingTooth;
-      triggerSecondaryHandler = triggerSec_missingTooth;
-      triggerTertiaryHandler = triggerThird_missingTooth;
+      if(configPage4.trigPatternSec == SEC_TRIGGER_BOSCH_1 || configPage4.trigPatternSec == SEC_TRIGGER_BOSCH_2) // For Bosch quick start, the decoding is quite different from others, so we use own function.
+      {
+        triggerSecondaryHandler = triggerSec_bosch;
+        triggerTertiaryHandler = triggerThird_bosch;
+      }
+      else
+      {
+        triggerSecondaryHandler = triggerSec_missingTooth;
+        triggerTertiaryHandler = triggerThird_missingTooth;
+      }
       decoderHasSecondary = true;
       getRPM = getRPM_missingTooth;
       getCrankAngle = getCrankAngle_missingTooth;
@@ -2875,10 +2883,18 @@ void initialiseTriggers()
 
       if(configPage4.TrigEdge == 0) { primaryTriggerEdge = RISING; } // Attach the crank trigger wheel interrupt (Hall sensor drags to ground when triggering)
       else { primaryTriggerEdge = FALLING; }
-      if(configPage4.TrigEdgeSec == 0) { secondaryTriggerEdge = RISING; }
-      else { secondaryTriggerEdge = FALLING; }
-      if(configPage10.TrigEdgeThrd == 0) { tertiaryTriggerEdge = RISING; }
-      else { tertiaryTriggerEdge = FALLING; }
+      if(configPage4.trigPatternSec == SEC_TRIGGER_BOSCH_1 || configPage4.trigPatternSec == SEC_TRIGGER_BOSCH_2) // For Bosch quick start, we need to keep track on both edges, so we use change.
+      {
+         secondaryTriggerEdge = CHANGE;
+         tertiaryTriggerEdge = CHANGE;
+      }
+      else
+      {
+        if(configPage4.TrigEdgeSec == 0) { secondaryTriggerEdge = RISING; }
+        else { secondaryTriggerEdge = FALLING; }
+        if(configPage10.TrigEdgeThrd == 0) { tertiaryTriggerEdge = RISING; }
+        else { tertiaryTriggerEdge = FALLING; }
+      }
 
       attachInterrupt(triggerInterrupt, triggerHandler, primaryTriggerEdge);
       attachInterrupt(triggerInterrupt2, triggerSecondaryHandler, secondaryTriggerEdge);

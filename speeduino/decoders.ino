@@ -371,7 +371,8 @@ void triggerSetup_missingTooth()
   checkSyncToothCount = (configPage4.triggerTeeth) >> 1; //50% of the total teeth.
   toothLastMinusOneToothTime = 0;
   toothCurrentCount = 0;
-  secondaryToothCount = 0; 
+  secondaryToothCount = 0;
+  tertiaryToothCount = 0;
   toothOneTime = 0;
   toothOneMinusOneTime = 0;
   MAX_STALL_TIME = (3333UL * triggerToothAngle * (configPage4.triggerMissingTeeth + 1)); //Minimum 50rpm. (3333uS is the time per degree at 50rpm)
@@ -534,24 +535,61 @@ void triggerSec_missingTooth()
   } //Trigger filter
 
   //Record the VVT Angle
-  if( configPage6.vvtEnabled > 0 )
+  if( (configPage6.vvtEnabled > 0) && (revolutionOne == 1) )
   {
     int16_t curAngle;
     curAngle = getCrankAngle();
-    if ( configPage4.trigPatternSec == SEC_TRIGGER_BOSCH )  // for "bosch quick start"
-    {
-      curAngle -= configPage4.triggerAngle; //Value at TDC
-      curAngle = curAngle - ( secondaryToothCount * 180 );
-	  if( configPage6.vvtMode == VVT_MODE_CLOSED_LOOP ) { curAngle -= configPage10.vvtCL0DutyAng; }  // when closed loop VVT is used, subtract the 0% duty cam angle value from curAngle
-      currentStatus.vvt1Angle = ANGLE_FILTER( (curAngle << 1), configPage4.ANGLEFILTER_VVT, currentStatus.vvt1Angle);
+    while(curAngle > 360) { curAngle -= 360; }
+    curAngle -= configPage4.triggerAngle; //Value at TDC
+    if( configPage6.vvtMode == VVT_MODE_CLOSED_LOOP ) { curAngle -= configPage10.vvtCL0DutyAng; }
+
+    currentStatus.vvt1Angle = ANGLE_FILTER( (curAngle << 1), configPage4.ANGLEFILTER_VVT, currentStatus.vvt1Angle);
+  }
+}
+
+void triggerSec_bosch()
+{
+  // the "primary" trigger edge is to check the engine phasing. On first rotation the gaps for trigger get longer and on second revolution the gaps get shorter.
+  if (READ_SEC_TRIGGER() != secondaryTriggerEdge)
+  {
+    curTime2 = micros();
+    curGap2 = curTime2 - toothLastSecToothTime;
+
+    //Safety check for initial startup
+    if( (toothLastSecToothTime == 0) )
+    { 
+      curGap2 = 0; 
+      toothLastSecToothTime = curTime2;
     }
-    else if ( revolutionOne == 1 )  // for single tooth and 4-1
+
+    if ( curGap2 >= triggerSecFilterTime )
     {
-      while(curAngle > 360) { curAngle -= 360; }
-      curAngle -= configPage4.triggerAngle; //Value at TDC
-      if( configPage6.vvtMode == VVT_MODE_CLOSED_LOOP ) { curAngle -= configPage10.vvtCL0DutyAng; }  // when closed loop VVT is used, subtract the 0% duty cam angle value from curAngle
-      currentStatus.vvt1Angle = ANGLE_FILTER( (curAngle << 1), configPage4.ANGLEFILTER_VVT, currentStatus.vvt1Angle);
+      targetGap2 = (toothLastSecToothTime - toothLastMinusOneSecToothTime);
+      toothLastMinusOneSecToothTime = toothLastSecToothTime;
+      if ( (curGap2 >= targetGap2) ) // On first revolution the gaps get longer.
+      {
+        revolutionOne = 1;
+
+      }
+      else  // On second revolution the gaps shorter.
+      {
+        revolutionOne = 0;
+      }
+    secondaryToothCount++;
     }
+    toothLastSecToothTime = curTime2;
+  } //Trigger filter
+  else // the other trigger edge is for the VVT angle.
+  {
+    if ( (configPage6.vvtEnabled > 0) && (currentStatus.hasSync == true) )
+    {
+      int16_t curAngle;
+      curAngle = getCrankAngle();
+      curAngle -= configPage4.triggerAngle; //Value at TDC
+      curAngle -= ( secondaryToothCount * 180 );
+      if( configPage6.vvtMode == VVT_MODE_CLOSED_LOOP ) { curAngle -= configPage4.vvtCL0DutyAng; }
+      currentStatus.vvtAngle = ANGLE_FILTER( (curAngle << 1), configPage4.ANGLEFILTER_VVT, currentStatus.vvtAngle);
+	}
   }
 }
 
@@ -565,6 +603,25 @@ void triggerThird_missingTooth()
   if( configPage6.vvtMode == VVT_MODE_CLOSED_LOOP ) { curAngle -= configPage4.vvt2CL0DutyAng; }
   //currentStatus.vvt2Angle = int8_t (curAngle); //vvt1Angle is only int8, but +/-127 degrees is enough for VVT control
   currentStatus.vvt2Angle = ANGLE_FILTER( (curAngle << 1), configPage4.ANGLEFILTER_VVT, currentStatus.vvt2Angle);
+}
+
+void triggerThird_bosch()
+{
+  //Record the VVT2 Angle (the only purpose of the third trigger)
+  if(currentStatus.hasSync == true) // only start checking angles after receiving sync.
+  {
+    if (READ_SEC_TRIGGER() != secondaryTriggerEdge)
+	{ // only take falling or rising edge into account.
+      int16_t curAngle;
+      curAngle = getCrankAngle();
+      curAngle -= configPage4.triggerAngle; //Value at TDC
+      curAngle -= ( tertiaryToothCount * 180 );
+      if( configPage6.vvtMode == VVT_MODE_CLOSED_LOOP ) { curAngle -= configPage4.vvt2CL0DutyAng; }
+      currentStatus.vvt2Angle = ANGLE_FILTER( (curAngle << 1), configPage4.ANGLEFILTER_VVT, currentStatus.vvt2Angle);
+      if ( tertiaryToothCount <= 3 ) { tertiaryToothCount++; }
+      else { tertiaryToothCount = 0; }
+    }
+  }
 }
 
 uint16_t getRPM_missingTooth()

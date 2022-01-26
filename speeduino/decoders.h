@@ -45,7 +45,9 @@ void loggerSecondaryISR();
 void triggerSetup_missingTooth();
 void triggerPri_missingTooth();
 void triggerSec_missingTooth();
+void triggerSec_bosch();
 void triggerThird_missingTooth();
+void triggerThird_bosch();
 uint16_t getRPM_missingTooth();
 int getCrankAngle_missingTooth();
 extern void triggerSetEndTeeth_missingTooth();
@@ -229,6 +231,7 @@ extern volatile unsigned long toothOneMinusOneTime; //The 2nd to last time (micr
 extern volatile bool revolutionOne; // For sequential operation, this tracks whether the current revolution is 1 or 2 (not 1)
 
 extern volatile unsigned int secondaryToothCount; //Used for identifying the current secondary (Usually cam) tooth for patterns with multiple secondary teeth
+extern volatile unsigned int tertiaryToothCount; //Used for identifying the current tertiary (Usually cam) tooth for patterns with multiple secondary teeth
 extern volatile unsigned long secondaryLastToothTime; //The time (micros()) that the last tooth was registered (Cam input)
 extern volatile unsigned long secondaryLastToothTime1; //The time (micros()) that the last tooth was registered (Cam input)
 
