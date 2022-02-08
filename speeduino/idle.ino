@@ -495,8 +495,8 @@ void idleControl()
         }
       }
 
-      if(currentStatus.idleUpActive == true) { currentStatus.idleDuty += configPage2.idleUpAdder; } //Add Idle Up amount if active
-      if( currentStatus.idleDuty > 100 ) { currentStatus.idleDuty = 100; } //Safety Check
+      if(currentStatus.idleUpActive == true) { currentStatus.idleDuty += (configPage2.idleUpAdder << 1); } //Add Idle Up amount if active
+      if( currentStatus.idleDuty > 200 ) { currentStatus.idleDuty = 200; } //Safety Check
       if( currentStatus.idleDuty == 0 ) 
       { 
         disableIdle();
@@ -504,7 +504,7 @@ void idleControl()
         break; 
       }
       BIT_SET(currentStatus.spark, BIT_SPARK_IDLE); //Turn the idle control flag on
-      idle_pwm_target_value = percentage(currentStatus.idleDuty, idle_pwm_max_count);
+      idle_pwm_target_value = halfPercentage(currentStatus.idleDuty, idle_pwm_max_count);
       currentStatus.idleLoad = currentStatus.idleDuty;
       idleOn = true;
       
@@ -517,8 +517,8 @@ void idleControl()
         //Currently cranking. Use the cranking table
         currentStatus.idleDuty = table2D_getValue(&iacCrankDutyTable, currentStatus.coolant + CALIBRATION_TEMPERATURE_OFFSET); //All temps are offset by 40 degrees
         currentStatus.idleLoad = currentStatus.idleDuty;
-        idle_pwm_target_value = percentage(currentStatus.idleDuty, idle_pwm_max_count);
-        idle_pid_target_value = idle_pwm_target_value << 2; //Resolution increased
+        idle_pwm_target_value = halfPercentage(currentStatus.idleDuty, idle_pwm_max_count);
+        idle_pid_target_value = idle_pwm_target_value << 1; //Resolution increased
         idlePID.Initialize(); //Update output to smooth transition
       }
       else if ( !BIT_CHECK(currentStatus.engine, BIT_ENGINE_RUN))
@@ -528,7 +528,7 @@ void idleControl()
           //Engine is not running or cranking, but the run before crank flag is set. Use the cranking table
           currentStatus.idleDuty = table2D_getValue(&iacCrankDutyTable, currentStatus.coolant + CALIBRATION_TEMPERATURE_OFFSET); //All temps are offset by 40 degrees
           currentStatus.idleLoad = currentStatus.idleDuty;
-          idle_pwm_target_value = percentage(currentStatus.idleDuty, idle_pwm_max_count);
+          idle_pwm_target_value = halfPercentage(currentStatus.idleDuty, idle_pwm_max_count);
         }
       }
       else
@@ -540,7 +540,7 @@ void idleControl()
         PID_computed = idlePID.Compute(true);
         if(PID_computed == true)
         {
-          idle_pwm_target_value = idle_pid_target_value>>2; //increased resolution
+          idle_pwm_target_value = idle_pid_target_value>>1; //increased resolution
           if( idle_pwm_target_value == 0 )
           { 
             disableIdle(); 
@@ -549,7 +549,7 @@ void idleControl()
           }
           BIT_SET(currentStatus.spark, BIT_SPARK_IDLE); //Turn the idle control flag on
           currentStatus.idleLoad = ((unsigned long)(idle_pwm_target_value * 100UL) / idle_pwm_max_count);
-          if(currentStatus.idleUpActive == true) { currentStatus.idleDuty += configPage2.idleUpAdder; } //Add Idle Up amount if active
+          if(currentStatus.idleUpActive == true) { currentStatus.idleDuty += (configPage2.idleUpAdder << 1); } //Add Idle Up amount if active
 
         }
         idleCounter++;
@@ -564,14 +564,14 @@ void idleControl()
         //Currently cranking. Use the cranking table
         currentStatus.idleDuty = table2D_getValue(&iacCrankDutyTable, currentStatus.coolant + CALIBRATION_TEMPERATURE_OFFSET); //All temps are offset by 40 degrees
         currentStatus.idleLoad = currentStatus.idleDuty;
-        idle_pwm_target_value = percentage(currentStatus.idleDuty, idle_pwm_max_count);
-        idle_pid_target_value = idle_pwm_target_value << 2; //Resolution increased
+        idle_pwm_target_value = halfPercentage(currentStatus.idleDuty, idle_pwm_max_count);
+        idle_pid_target_value = idle_pwm_target_value << 1; //Resolution increased
         idlePID.Initialize(); //Update output to smooth transition
       }
       else
       {
         //Read the OL table as feedforward term
-        FeedForwardTerm = percentage(table2D_getValue(&iacPWMTable, currentStatus.coolant + CALIBRATION_TEMPERATURE_OFFSET), idle_pwm_max_count<<2); //All temps are offset by 40 degrees
+        FeedForwardTerm = halfPercentage(table2D_getValue(&iacPWMTable, currentStatus.coolant + CALIBRATION_TEMPERATURE_OFFSET), idle_pwm_max_count<<2); //All temps are offset by 40 degrees
     
         currentStatus.CLIdleTarget = (byte)table2D_getValue(&iacClosedLoopTable, currentStatus.coolant + CALIBRATION_TEMPERATURE_OFFSET); //All temps are offset by 40 degrees
         idle_cl_target_rpm = (uint16_t)currentStatus.CLIdleTarget * 10; //Multiply the byte target value back out by 10
@@ -583,7 +583,7 @@ void idleControl()
 
         if(PID_computed == true)
         {
-          idle_pwm_target_value = idle_pid_target_value>>2; //increased resolution
+          idle_pwm_target_value = idle_pid_target_value>>1; //increased resolution
           if( idle_pwm_target_value == 0 )
           { 
             disableIdle(); 
@@ -592,7 +592,7 @@ void idleControl()
           }
           BIT_SET(currentStatus.spark, BIT_SPARK_IDLE); //Turn the idle control flag on
           currentStatus.idleLoad = ((unsigned long)(idle_pwm_target_value * 100UL) / idle_pwm_max_count);
-          if(currentStatus.idleUpActive == true) { currentStatus.idleDuty += configPage2.idleUpAdder; } //Add Idle Up amount if active
+          if(currentStatus.idleUpActive == true) { currentStatus.idleDuty += (configPage2.idleUpAdder << 1); } //Add Idle Up amount if active
 
         }
         idleCounter++;
@@ -752,7 +752,7 @@ void idleControl()
   //Check for 100% DC on PWM idle
   if( (configPage6.iacAlgorithm == IAC_ALGORITHM_PWM_OL) || (configPage6.iacAlgorithm == IAC_ALGORITHM_PWM_CL) || (configPage6.iacAlgorithm == IAC_ALGORITHM_PWM_OLCL) )
   {
-    if(currentStatus.idleLoad == 100)
+    if(currentStatus.idleLoad == 200)
     {
       IDLE_TIMER_DISABLE();
       IDLE_PIN_HIGH();
