@@ -16,7 +16,7 @@
 #include "decoders.h"
 #include "corrections.h"
 #include "idle.h"
-#include "table.h"
+#include "table2d.h"
 #include "acc_mc33810.h"
 #include BOARD_H //Note that this is not a real file, it is defined in globals.h. 
 #include EEPROM_LIB_H
@@ -52,29 +52,46 @@ void initialiseAll()
 
     pinMode(LED_BUILTIN, OUTPUT);
     digitalWrite(LED_BUILTIN, LOW);
-    table3D_setSize(&fuelTable, 16);
-    table3D_setSize(&fuelTable2, 16);
-    table3D_setSize(&ignitionTable, 16);
-    table3D_setSize(&ignitionTable2, 16);
-    table3D_setSize(&afrTable, 16);
-    table3D_setSize(&stagingTable, 8);
-    table3D_setSize(&boostTable, 8);
-    table3D_setSize(&vvtTable, 8);
-    table3D_setSize(&vvt2Table, 8);
-    table3D_setSize(&wmiTable, 8);
-    table3D_setSize(&trim1Table, 6);
-    table3D_setSize(&trim2Table, 6);
-    table3D_setSize(&trim3Table, 6);
-    table3D_setSize(&trim4Table, 6);
-    table3D_setSize(&trim5Table, 6);
-    table3D_setSize(&trim6Table, 6);
-    table3D_setSize(&trim7Table, 6);
-    table3D_setSize(&trim8Table, 6);
-    table3D_setSize(&dwellTable, 4);
 
     #if defined(CORE_STM32)
     configPage9.intcan_available = 1;   // device has internal canbus
     //STM32 can not currently enabled
+    #endif
+
+    /*
+    ***********************************************************************************************************
+    * EEPROM reset
+    */
+    #if defined(EEPROM_RESET_PIN)
+    uint32_t start_time = millis();
+    byte exit_erase_loop = false; 
+    pinMode(EEPROM_RESET_PIN, INPUT_PULLUP);  
+
+    //only start routine when this pin is low because it is pulled low
+    while (digitalRead(EEPROM_RESET_PIN) != HIGH && (millis() - start_time)<1050)
+    {
+      //make sure the key is pressed for atleast 0.5 second 
+      if ((millis() - start_time)>500) {
+        //if key is pressed afterboot for 0.5 second make led turn off
+        digitalWrite(LED_BUILTIN, HIGH);
+
+        //see if the user reacts to the led turned off with removing the keypress within 1 second
+        while (((millis() - start_time)<1000) && (exit_erase_loop!=true)){
+
+          //if user let go of key within 1 second erase eeprom
+          if(digitalRead(EEPROM_RESET_PIN) != LOW){
+            #if defined(FLASH_AS_EEPROM_h)
+              EEPROM.read(0); //needed for SPI eeprom emulation.
+              EEPROM.clear(); 
+            #else 
+              for (int i = 0 ; i < EEPROM.length() ; i++) { EEPROM.write(i, 255);}
+            #endif
+            //if erase done exit while loop.
+            exit_erase_loop = true;
+          }
+        }
+      } 
+    }
     #endif
     
     loadConfig();
@@ -87,8 +104,8 @@ void initialiseAll()
     initBoard(); //This calls the current individual boards init function. See the board_xxx.ino files for these.
     initialiseTimers();
   #ifdef SD_LOGGING
-    initSD();
     initRTC();
+    initSD();
   #endif
 
     Serial.begin(115200);
@@ -222,6 +239,19 @@ void initialiseAll()
     oilPressureProtectTable.values = configPage10.oilPressureProtMins;
     oilPressureProtectTable.axisX = configPage10.oilPressureProtRPM;
 
+    coolantProtectTable.valueSize = SIZE_BYTE;
+    coolantProtectTable.axisSize = SIZE_BYTE; //Set this table to use byte axis bins
+    coolantProtectTable.xSize = 6;
+    coolantProtectTable.values = configPage9.coolantProtRPM;
+    coolantProtectTable.axisX = configPage9.coolantProtTemp;
+
+
+    fanPWMTable.valueSize = SIZE_BYTE;
+    fanPWMTable.axisSize = SIZE_BYTE; //Set this table to use byte axis bins
+    fanPWMTable.xSize = 4;
+    fanPWMTable.values = configPage9.PWMFanDuty;
+    fanPWMTable.axisX = configPage6.fanPWMBins;
+
     wmiAdvTable.valueSize = SIZE_BYTE;
     wmiAdvTable.axisSize = SIZE_BYTE; //Set this table to use byte axis bins
     wmiAdvTable.xSize = 6;
@@ -320,35 +350,6 @@ void initialiseAll()
     initialiseADC();
     initialiseProgrammableIO();
 
-    //Lookup the current MAP reading for barometric pressure
-    instanteneousMAPReading();
-    //barometric reading can be taken from either an external sensor if enabled, or simply by using the initial MAP value
-    if ( configPage6.useExtBaro != 0 )
-    {
-      readBaro();
-      storeLastBaro(currentStatus.baro);
-    }
-    else
-    {
-      /*
-      * The highest sea-level pressure on Earth occurs in Siberia, where the Siberian High often attains a sea-level pressure above 105 kPa;
-      * with record highs close to 108.5 kPa.
-      * The lowest measurable sea-level pressure is found at the centers of tropical cyclones and tornadoes, with a record low of 87 kPa;
-      */
-      if ((currentStatus.MAP >= BARO_MIN) && (currentStatus.MAP <= BARO_MAX)) //Check if engine isn't running
-      {
-        currentStatus.baro = currentStatus.MAP;
-        storeLastBaro(currentStatus.baro);
-      }
-      else
-      {
-        //Attempt to use the last known good baro reading from EEPROM
-        if ((readLastBaro() >= BARO_MIN) && (readLastBaro() <= BARO_MAX)) //Make sure it's not invalid (Possible on first run etc)
-        { currentStatus.baro = readLastBaro(); } //last baro correction
-        else { currentStatus.baro = 100; } //Final fall back position.
-      }
-    }
-
     //Check whether the flex sensor is enabled and if so, attach an interrupt for it
     if(configPage2.flexEnabled > 0)
     {
@@ -411,7 +412,11 @@ void initialiseAll()
     fixedCrankingOverride = 0;
     timer5_overflow_count = 0;
     toothHistoryIndex = 0;
-    toothHistorySerialIndex = 0;
+    toothLastToothTime = 0;
+
+    //Lookup the current MAP reading for barometric pressure
+    instanteneousMAPReading();
+    readBaro();
     
     noInterrupts();
     initialiseTriggers();
@@ -1201,7 +1206,7 @@ void initialiseAll()
     digitalWrite(LED_BUILTIN, HIGH);
 }
 /** Set board / microcontroller specfic pin mappings / assignments.
- * The boardID is switch-case compared against raw boardID integers (not enum or #define:d label, and probably no need for that either)
+ * The boardID is switch-case compared against raw boardID integers (not enum or defined label, and probably no need for that either)
  * which are originated from tuning SW (e.g. TS) set values and are avilable in reference/speeduino.ini (See pinLayout, note also that
  * numbering is not contiguous here).
  */
@@ -2134,7 +2139,7 @@ void setPinMapping(byte boardID)
       pinBat = A14; //Battery reference voltage pin
       pinSpareTemp1 = A17; //spare Analog input 1
       pinLaunch = A15; //Can be overwritten below
-      pinTachOut = 7; //Tacho output pin
+      pinTachOut = 5; //Tacho output pin
       pinIdle1 = 27; //Single wire idle control
       pinIdle2 = 29; //2 wire idle control. Shared with Spare 1 output
       pinFuelPump = 8; //Fuel pump output
@@ -3237,8 +3242,28 @@ void initialiseTriggers()
       attachInterrupt(triggerInterrupt2, triggerSecondaryHandler, secondaryTriggerEdge);
       break;
 
+    case DECODER_NGC:
+      //Chrysler NGC - 4, 6 and 8 cylinder
+      triggerSetup_NGC();
+      triggerHandler = triggerPri_NGC;
+      decoderHasSecondary = true;
+      getRPM = getRPM_NGC;
+      getCrankAngle = getCrankAngle_missingTooth;
+      triggerSetEndTeeth = triggerSetEndTeeth_NGC;
 
+      primaryTriggerEdge = CHANGE;
+      if (configPage2.nCylinders == 4) {
+        triggerSecondaryHandler = triggerSec_NGC4;
+        secondaryTriggerEdge = CHANGE;
+      }
+      else {
+        triggerSecondaryHandler = triggerSec_NGC68;
+        secondaryTriggerEdge = FALLING;
+      }
 
+      attachInterrupt(triggerInterrupt, triggerHandler, primaryTriggerEdge);
+      attachInterrupt(triggerInterrupt2, triggerSecondaryHandler, secondaryTriggerEdge);
+      break;
 
     default:
       triggerHandler = triggerPri_missingTooth;

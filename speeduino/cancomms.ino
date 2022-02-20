@@ -210,7 +210,7 @@ void sendcanValues(uint16_t offset, uint16_t packetLength, byte cmd, byte portTy
   fullStatus[0] = currentStatus.secl; //secl is simply a counter that increments each second. Used to track unexpected resets (Which will reset this count to 0)
   fullStatus[1] = currentStatus.status1; //status1 Bitfield, inj1Status(0), inj2Status(1), inj3Status(2), inj4Status(3), DFCOOn(4), boostCutFuel(5), toothLog1Ready(6), toothLog2Ready(7)
   fullStatus[2] = currentStatus.engine; //Engine Status Bitfield, running(0), crank(1), ase(2), warmup(3), tpsaccaen(4), tpsacden(5), mapaccaen(6), mapaccden(7)
-  fullStatus[3] = (byte)(divu100(currentStatus.dwell)); //Dwell in ms * 10
+  fullStatus[3] = (byte)div100(currentStatus.dwell); //Dwell in ms * 10
   fullStatus[4] = lowByte(currentStatus.MAP); //2 bytes for MAP
   fullStatus[5] = highByte(currentStatus.MAP);
   fullStatus[6] = (byte)(currentStatus.IAT + CALIBRATION_TEMPERATURE_OFFSET); //mat
@@ -327,7 +327,7 @@ void sendcanValues(uint16_t offset, uint16_t packetLength, byte cmd, byte portTy
   fullStatus[103] = currentStatus.fuelPressure;
   fullStatus[104] = currentStatus.oilPressure;
   fullStatus[105] = currentStatus.wmiPW;
-  fullStatus[106] = currentStatus.status4; // wmiEmptyBit(0), vvt1Error(1), vvt2Error(2), UnusedBits(3:7)
+  fullStatus[106] = currentStatus.status4; // wmiEmptyBit(0), vvt1Error(1), vvt2Error(2), fanStatus(3), UnusedBits(4:7)
   fullStatus[107] = (int8_t)currentStatus.vvt2Angle;
   fullStatus[108] = currentStatus.vvt2TargetAngle;
   fullStatus[109] = currentStatus.vvt2Duty;
@@ -340,6 +340,9 @@ void sendcanValues(uint16_t offset, uint16_t packetLength, byte cmd, byte portTy
   fullStatus[116] = currentStatus.advance2; //advance 2 
   fullStatus[117] = currentStatus.nitrous_status;
   fullStatus[118] = currentStatus.TS_SD_Status; //SD card status
+  fullStatus[119] = lowByte(currentStatus.EMAP); //2 bytes for EMAP
+  fullStatus[120] = highByte(currentStatus.EMAP);
+  fullStatus[121] = currentStatus.fanDuty;
 
   for(byte x=0; x<packetLength; x++)
   {
@@ -430,7 +433,7 @@ void sendCancommand(uint8_t cmdtype, uint16_t canaddress, uint8_t candata1, uint
         //send to truecan send routine
         //canaddress == speeduino canid, candata1 == canin channel dest, paramgroup == can address  to request from
         //This section is to be moved to the correct can output routine later
-        #if defined(CORE_TEENSY) || defined(STM32F407xx) || defined(STM32F103xB) || defined(STM32F405xx)  //Scope guarding this for now, but this needs a bit of a rethink for how it can be handled better across multiple archs
+        #if defined(NATIVE_CAN_AVAILABLE)
         outMsg.id = (canaddress);
         outMsg.len = 8;
         outMsg.buf[0] = 0x0B ;  //11;   
