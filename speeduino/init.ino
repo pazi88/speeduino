@@ -20,6 +20,7 @@
 #include "acc_mc33810.h"
 #include BOARD_H //Note that this is not a real file, it is defined in globals.h. 
 #include EEPROM_LIB_H
+#include <MS41.h>
 #ifdef SD_LOGGING
   #include "SD_logger.h"
   #include "rtc_common.h"
@@ -112,6 +113,7 @@ void initialiseAll()
     #if defined(CANSerial_AVAILABLE)
       if (configPage9.enable_secondarySerial == 1) { CANSerial.begin(115200); }
     #endif
+    setupDS2();
 
     //Repoint the 2D table structs to the config pages that were just loaded
     taeTable.valueSize = SIZE_BYTE; //Set this table to use byte values
