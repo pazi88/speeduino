@@ -16,6 +16,12 @@
 
 void sendBMWCluster();
 void sendVAGCluster();
-void DashMessages(uint16_t DashMessageID);
+void sendHaltech30Hz(); //50Hz rate in Haltech, but 30Hz for now in speeduino
+void sendHaltech15Hz(); //20Hz rate in Haltech, but 15Hz for now in speeduino
+void sendHaltech10Hz(); //10Hz rate in Haltech
+void sendHaltech4Hz(); //5Hz rate in Haltech, but 4Hz for now in speeduino
+
+void dashMessage(uint16_t dashMessageID);
+void haltechDashMessage(uint16_t dashMessageID);
 #endif
 #endif // CANBROADCAST_H

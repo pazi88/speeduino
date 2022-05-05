@@ -254,6 +254,10 @@ void loop()
            //sendCancommand(3,((configPage9.realtime_base_address & 0x3FF)+ 0x100),currentStatus.TPS,0,0x200);
           }
       #endif     
+      
+      #if defined(NATIVE_CAN_AVAILABLE)
+      if (configPage2.haltecDashV2 == true) { sendHaltech15Hz(); }
+      #endif
 
       //Check for launching/flat shift (clutch) can be done around here too
       previousClutchTrigger = clutchTrigger;
@@ -303,6 +307,10 @@ void loop()
       #ifdef SD_LOGGING
         if(configPage13.onboard_log_file_rate == LOGGER_RATE_10HZ) { writeSDLogEntry(); }
       #endif
+      
+      #if defined(NATIVE_CAN_AVAILABLE)
+      if (configPage2.haltecDashV2 == true) { sendHaltech10Hz(); }
+      #endif
     }
     if(BIT_CHECK(LOOP_TIMER, BIT_TIMER_30HZ)) //30 hertz
     {
@@ -316,6 +324,7 @@ void loop()
       #if defined(NATIVE_CAN_AVAILABLE)
       if (configPage2.canBMWCluster == true) { sendBMWCluster(); }
       if (configPage2.canVAGCluster == true) { sendVAGCluster(); }
+      if (configPage2.haltecDashV2 == true) { sendHaltech30Hz(); }
       #endif
       #if TPS_READ_FREQUENCY == 30
         readTPS();
@@ -349,6 +358,9 @@ void loop()
         if(configPage13.onboard_log_file_rate == LOGGER_RATE_4HZ) { writeSDLogEntry(); }
       #endif  
       
+      #if defined(NATIVE_CAN_AVAILABLE)
+      if (configPage2.haltecDashV2 == true) { sendHaltech4Hz(); }
+      #endif
       currentStatus.fuelPressure = getFuelPressure();
       currentStatus.oilPressure = getOilPressure();
 
