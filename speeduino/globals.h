@@ -366,6 +366,11 @@
 #define GOING_LOW         0
 #define GOING_HIGH        1
 
+#define CAN_125KBPS    0
+#define CAN_250KBPS    1
+#define CAN_500KBPS    2
+#define CAN_1000KBPS   3
+
 #define MAX_RPM 18000 /**< The maximum rpm that the ECU will attempt to run at. It is NOT related to the rev limiter, but is instead dictates how fast certain operations will be allowed to run. Lower number gives better performance */
 
 #define BATTV_COR_MODE_WHOLE 0
@@ -909,7 +914,9 @@ struct config2 {
   byte enableCluster2 : 1;
   byte unusedClusterBits : 4;
 
-  byte unused2_95;
+  byte can0Speed : 2;
+  byte can1Speed : 2;
+  byte unusedCanBits : 4;
 
 #if defined(CORE_AVR)
   };

@@ -283,9 +283,30 @@ void initialiseAll()
       configPage9.intcan_available = 1;   // device has internal canbus
       //Teensy uses the Flexcan_T4 library to use the internal canbus
       //enable local can interface
-      //setup can interface to 500k   
+      //setup can interface
       Can0.begin();
-      Can0.setBaudRate(500000);
+      switch (configPage2.can0Speed) //Set speed
+      {
+        case CAN_125KBPS:
+          Can0.setBaudRate(125000);
+        break;
+
+        case CAN_250KBPS:
+          Can0.setBaudRate(250000);
+        break;
+
+        case CAN_500KBPS:
+          Can0.setBaudRate(500000);
+        break;
+
+        case CAN_1000KBPS:
+          Can0.setBaudRate(1000000);
+        break;
+
+        default:
+          Can0.setBaudRate(500000);
+        break;
+      }
       Can0.enableFIFO();
     #endif
 
