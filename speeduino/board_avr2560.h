@@ -45,6 +45,7 @@
     #define USE_SERIAL3
   #endif
 
+#define PWM_FAN_AVAILABLE
 /*
 ***********************************************************************************************************
 * Schedules
@@ -133,13 +134,13 @@
 */
   #define ENABLE_BOOST_TIMER()  TIMSK1 |= (1 << OCIE1A)
   #define DISABLE_BOOST_TIMER() TIMSK1 &= ~(1 << OCIE1A)
-  #define ENABLE_VVT_TIMER()    TIMSK1 |= (1 << OCIE1B)
-  #define DISABLE_VVT_TIMER()   TIMSK1 &= ~(1 << OCIE1B)
+  #define ENABLE_FAN_TIMER()    TIMSK1 |= (1 << OCIE1B)
+  #define DISABLE_FAN_TIMER()   TIMSK1 &= ~(1 << OCIE1B)
 
   #define BOOST_TIMER_COMPARE   OCR1A
   #define BOOST_TIMER_COUNTER   TCNT1
-  #define VVT_TIMER_COMPARE     OCR1B
-  #define VVT_TIMER_COUNTER     TCNT1
+  #define FAN_TIMER_COMPARE     OCR1B
+  #define FAN_TIMER_COUNTER     TCNT1
 
 /*
 ***********************************************************************************************************

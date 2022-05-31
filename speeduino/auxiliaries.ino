@@ -31,7 +31,9 @@ void initialiseFan()
     DISABLE_FAN_TIMER(); //disable FAN timer if available
     if ( configPage2.fanEnable == 2 ) // PWM Fan control
     {
-      #if defined(CORE_TEENSY)
+      #if defined(CORE_AVR)
+        fan_pwm_max_count = 1000000L / (32 * configPage6.fanFreq * 2); //Converts the frequency in Hz to the number of ticks (at 16uS) it takes to complete 1 cycle. Note that the frequency is divided by 2 coming from TS to allow for up to 512hz
+      #elif defined(CORE_TEENSY)
         fan_pwm_max_count = 1000000L / (32 * configPage6.fanFreq * 2); //Converts the frequency in Hz to the number of ticks (at 16uS) it takes to complete 1 cycle. Note that the frequency is divided by 2 coming from TS to allow for up to 512hz
       #endif
       fan_pwm_value = 0;
@@ -196,7 +198,7 @@ void initialiseAuxPWM()
 
     vvt1_pwm_value = 0;
     vvt2_pwm_value = 0;
-    ENABLE_VVT_TIMER(); //Turn on the B compare unit (ie turn on the interrupt)
+    //ENABLE_VVT_TIMER(); //Turn on the B compare unit (ie turn on the interrupt)
     BIT_CLEAR(currentStatus.status4, BIT_STATUS4_VVT1_ERROR);
     BIT_CLEAR(currentStatus.status4, BIT_STATUS4_VVT2_ERROR);
     vvtTimeHold = false;
@@ -214,7 +216,7 @@ void initialiseAuxPWM()
     currentStatus.wmiPW = 0;
     vvt1_pwm_value = 0;
     vvt2_pwm_value = 0;
-    ENABLE_VVT_TIMER(); //Turn on the B compare unit (ie turn on the interrupt)
+    //ENABLE_VVT_TIMER(); //Turn on the B compare unit (ie turn on the interrupt)
   }
 
   currentStatus.boostDuty = 0;
@@ -460,6 +462,7 @@ void boostControl()
 
 void vvtControl()
 {
+/*
   if( (configPage6.vvtEnabled == 1) && (currentStatus.coolant >= (int)(configPage4.vvtMinClt - CALIBRATION_TEMPERATURE_OFFSET)) && (BIT_CHECK(currentStatus.engine, BIT_ENGINE_RUN)))
   {
     if(vvtTimeHold == false) 
@@ -623,7 +626,8 @@ void vvtControl()
     vvt2_pwm_state = false;
     vvt2_max_pwm = false;
     vvtTimeHold=false;
-  } 
+  }
+*/  
 }
 
 void nitrousControl()
@@ -685,6 +689,7 @@ void nitrousControl()
 // Water methanol injection control
 void wmiControl()
 {
+/*
   int wmiPW = 0;
   
   // wmi can only work when vvt is disabled 
@@ -748,6 +753,7 @@ void wmiControl()
       }
     }
   }
+*/
 }
 
 void boostDisable()
@@ -780,7 +786,7 @@ void boostDisable()
   }
 }
 
-//The interrupt to control the VVT PWM
+/*The interrupt to control the VVT PWM
 #if defined(CORE_AVR)
   ISR(TIMER1_COMPB_vect)
 #else
@@ -874,10 +880,15 @@ void boostDisable()
     }
   }
 }
-
+*/
 #if defined(PWM_FAN_AVAILABLE)
-//The interrupt to control the FAN PWM. Mega2560 doesn't have enough timers, so this is only for the ARM chip ones
-  void fanInterrupt()
+//The interrupt to control the FAN PWM.
+
+#if defined(CORE_AVR)
+  ISR(TIMER1_COMPB_vect)
+#else
+  void fanInterrupt() //Most ARM chips can simply call a function
+#endif
 {
   if (fan_pwm_state == true)
   {
