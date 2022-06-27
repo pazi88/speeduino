@@ -248,6 +248,10 @@
 #define COMPOSITE_LOG_TRIG 2
 #define COMPOSITE_LOG_SYNC 3
 
+#define EGO_TYPE_OFF      0
+#define EGO_TYPE_NARROW   1
+#define EGO_TYPE_WIDE     2
+
 #define INJ_TYPE_PORT 0
 #define INJ_TYPE_TBODY 1
 
@@ -278,6 +282,9 @@
 
 #define BOOST_MODE_SIMPLE   0
 #define BOOST_MODE_FULL     1
+
+#define EN_BOOST_CONTROL_BARO   0
+#define EN_BOOST_CONTROL_FIXED  1
 
 #define WMI_MODE_SIMPLE       0
 #define WMI_MODE_PROPORTIONAL 1
@@ -443,6 +450,7 @@ extern struct table3d16RpmLoad ignitionTable2; //16x16 ignition map
 extern struct table3d16RpmLoad afrTable; //16x16 afr target map
 extern struct table3d8RpmLoad stagingTable; //8x8 fuel staging table
 extern struct table3d8RpmLoad boostTable; //8x8 boost map
+extern struct table3d8RpmLoad boostTableLookupDuty; //8x8 boost map
 extern struct table3d8RpmLoad vvtTable; //8x8 vvt map
 extern struct table3d8RpmLoad vvt2Table; //8x8 vvt map
 extern struct table3d8RpmLoad wmiTable; //8x8 wmi map
@@ -800,7 +808,7 @@ struct config2 {
 
   //config2 in ini
   byte fuelAlgorithm : 3;///< Fuel algorithm - 0=Manifold pressure/MAP (LOAD_SOURCE_MAP, default, proven), 1=Throttle/TPS (LOAD_SOURCE_TPS), 2=IMAP/EMAP (LOAD_SOURCE_IMAPEMAP)
-  byte fixAngEnable : 1; ///< Whether fixed/locked timing is enabled (0=diable, 1=enable, See @ref configPage4.FixAng)
+  byte fixAngEnable : 1; ///< Whether fixed/locked timing is enabled (0=disable, 1=enable, See @ref configPage4.FixAng)
   byte nInjectors : 4;   ///< Number of injectors
 
 
@@ -810,8 +818,8 @@ struct config2 {
   byte legacyMAP  : 1;  ///< Legacy MAP reading behaviour
   byte baroCorr : 1;    // Unused ?
   byte injLayout : 2;   /**< Injector Layout - 0=INJ_PAIRED (number outputs == number cyls/2, timed over 1 crank rev), 1=INJ_SEMISEQUENTIAL (like paired, but number outputs == number cyls, only for 4 cyl),
-                         2=INJ_BANKED (2 outputs are used), 3=INJ_SEQUENTIAL (number ouputs == number cyls, timed over full cycle, 2 crank revs) */
-  byte perToothIgn : 1; ///< Experimental / New ign. mode ... (?) (See decoders.ino)
+                         2=INJ_BANKED (2 outputs are used), 3=INJ_SEQUENTIAL (number outputs == number cyls, timed over full cycle, 2 crank revs) */
+  byte perToothIgn : 1; ///< Experimental / New ignition mode ... (?) (See decoders.ino)
   byte dfcoEnabled : 1; ///< Whether or not DFCO (deceleration fuel cut-off) is turned on
 
   byte aeColdTaperMax;  ///< AE cold modifier, taper end temp (no modifier applied, was primePulse in early versions)
@@ -1176,13 +1184,13 @@ struct config9 {
   byte unused10_182;
   byte unused10_183;
   byte unused10_184;
-  byte unused10_185;
-  byte unused10_186;
-  byte unused10_187;
-  byte unused10_188;
-  byte unused10_189;
-  byte unused10_190;
-  byte unused10_191;
+  byte afrProtectEnabled : 2; /* < AFR protection enabled status. 0 = disabled, 1 = fixed mode, 2 = table mode */
+  byte afrProtectMinMAP; /* < Minimum MAP. Stored value is divided by 2. Increments of 2 kPa, maximum 511 (?) kPa */
+  byte afrProtectMinRPM; /* < Minimum RPM. Stored value is divded by 100. Increments of 100 RPM, maximum 25500 RPM */
+  byte afrProtectMinTPS; /* < Minimum TPS. */
+  byte afrProtectDeviation; /* < Maximum deviation from AFR target table. Stored value is multiplied by 10 */
+  byte afrProtectCutTime; /* < Time in ms before cut. Stored value is divided by 100. Maximum of 2550 ms */
+  byte afrProtectReactivationTPS; /* Disable engine protection cut once below this TPS percentage */
   
 #if defined(CORE_AVR)
   };
@@ -1389,7 +1397,7 @@ struct config13 {
   uint8_t outputDelay[8]; ///< Output write delay for each programmable I/O (Unit: 0.1S)
   uint8_t firstDataIn[8]; ///< Set of first I/O vars to compare
   uint8_t secondDataIn[8];///< Set of second I/O vars to compare
-  uint8_t outputTimeLimit[8]; ///< Output delay for each programmable I/O, kindOfLimiting bit dependant(Unit: 0.1S)
+  uint8_t outputTimeLimit[8]; ///< Output delay for each programmable I/O, kindOfLimiting bit dependent(Unit: 0.1S)
   uint8_t unused_13[8]; // Unused
   int16_t firstTarget[8]; ///< first  target value to compare with numeric comp
   int16_t secondTarget[8];///< second target value to compare with bitwise op
@@ -1429,6 +1437,24 @@ struct config13 {
 #else
   } __attribute__((__packed__)); //The 32 bit systems require all structs to be fully packed
 #endif
+
+/**
+Page 15 - second page for VVT and boost control.
+256 bytes long. 
+*/
+struct config15 {
+  byte boostControlEnable : 1; 
+  byte unused15_1 : 7; //7bits unused
+  byte boostDCWhenDisabled;
+  byte boostControlEnableThreshold; //if fixed value enable set threshold here.
+  byte unused15_3_176[173];
+
+#if defined(CORE_AVR)
+  };
+#else
+  } __attribute__((__packed__)); //The 32 bit systems require all structs to be fully packed
+#endif
+
 
 extern byte pinInjector1; //Output pin injector 1
 extern byte pinInjector2; //Output pin injector 2
@@ -1502,7 +1528,7 @@ extern byte pinFuelPressure;
 extern byte pinOilPressure;
 extern byte pinWMIEmpty; // Water tank empty sensor
 extern byte pinWMIIndicator; // No water indicator bulb
-extern byte pinWMIEnabled; // ON-OFF ouput to relay/pump/solenoid 
+extern byte pinWMIEnabled; // ON-OFF output to relay/pump/solenoid
 extern byte pinMC33810_1_CS;
 extern byte pinMC33810_2_CS;
 #ifdef USE_SPI_EEPROM
@@ -1522,6 +1548,7 @@ extern struct config6 configPage6;
 extern struct config9 configPage9;
 extern struct config10 configPage10;
 extern struct config13 configPage13;
+extern struct config15 configPage15;
 //extern byte cltCalibrationTable[CALIBRATION_TABLE_SIZE]; /**< An array containing the coolant sensor calibration values */
 //extern byte iatCalibrationTable[CALIBRATION_TABLE_SIZE]; /**< An array containing the inlet air temperature sensor calibration values */
 //extern byte o2CalibrationTable[CALIBRATION_TABLE_SIZE]; /**< An array containing the O2 sensor calibration values */
