@@ -343,7 +343,7 @@ uint16_t correctionAccel()
   {
     if(configPage2.aeMode == AE_MODE_MAP)
     {
-      if (MAP_change <= 2)
+      if (MAP_change <= configPage2.maeMinChange)
       {
         accelValue = 100;
         currentStatus.mapDOT = 0;
@@ -401,8 +401,8 @@ uint16_t correctionAccel()
     {
     
       //Check for deceleration (Deceleration adjustment not yet supported)
-      //Also check for only very small movement (Movement less than or equal to 2% is ignored). This not only means we can skip the lookup, but helps reduce false triggering around 0-2% throttle openings
-      if (TPS_change <= TPSAE_ABSOLUTE_THRESHOLD)
+      //Also check for only very small movement. This not only means we can skip the lookup, but helps reduce false triggering around 0-2% throttle openings
+      if (TPS_change <= configPage2.taeMinChange)
       {
         accelValue = 100;
         currentStatus.tpsDOT = 0;
@@ -911,12 +911,13 @@ int8_t correctionKnock(int8_t advance)
 uint16_t correctionsDwell(uint16_t dwell)
 {
   uint16_t tempDwell = dwell;
+  uint16_t sparkDur_uS = (configPage4.sparkDur * 100); //Spark duration is in mS*10. Multiple it by 100 to get spark duration in uS
   //Pull battery voltage based dwell correction and apply if needed
   currentStatus.dwellCorrection = table2D_getValue(&dwellVCorrectionTable, currentStatus.battery10);
   if (currentStatus.dwellCorrection != 100) { tempDwell = div100(dwell) * currentStatus.dwellCorrection; }
 
   //Dwell limiter
-  uint16_t dwellPerRevolution = tempDwell + (uint16_t)(configPage4.sparkDur * 100); //Spark duration is in mS*10. Multiple it by 100 to get spark duration in uS
+  uint16_t dwellPerRevolution = tempDwell + sparkDur_uS;
   int8_t pulsesPerRevolution = 1;
   //Single channel spark mode is the only time there will be more than 1 pulse per revolution on any given output
   //For rotary ignition this also holds true in wasted spark configuration (FC/FD) resulting in 2 pulses. RX-8 however is fully sequential resulting in 1 pulse
@@ -929,7 +930,8 @@ uint16_t correctionsDwell(uint16_t dwell)
   if(dwellPerRevolution > revolutionTime)
   {
     //Possibly need some method of reducing spark duration here as well, but this is a start
-    tempDwell = (revolutionTime / pulsesPerRevolution) - (configPage4.sparkDur * 100);
+    uint16_t adjustedSparkDur = (sparkDur_uS * revolutionTime) / dwellPerRevolution;
+    tempDwell = (revolutionTime / pulsesPerRevolution) - adjustedSparkDur;
   }
   return tempDwell;
 }
