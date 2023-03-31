@@ -979,7 +979,7 @@ struct config4 {
   byte iatRetBins[6]; ///< Inlet Air Temp timing retard curve bins (Unit: ...)
   byte iatRetValues[6]; ///< Inlet Air Temp timing retard curve values (Unit: ...)
   byte dfcoRPM;       ///< RPM at which DFCO turns off/on at
-  byte dfcoHyster;    //Hysteris RPM for DFCO
+  byte dfcoRPMdot;    //Hysteris RPM for DFCO
   byte dfcoTPSThresh; //TPS must be below this figure for DFCO to engage (Unit: ...)
 
   byte ignBypassEnabled : 1; //Whether or not the ignition bypass is enabled
