@@ -370,16 +370,14 @@ uint16_t correctionAccel(void)
             accelValue = table2D_getValue(&maeTable, currentStatus.mapDOT / 10); //The x-axis of mae table is divided by 10 to fit values in byte.
   
             //Apply the RPM taper to the above
-            //The RPM settings are stored divided by 100:
-            uint16_t trueTaperMin = configPage2.aeTaperMin * 100;
-            uint16_t trueTaperMax = configPage2.aeTaperMax * 100;
-            if (currentStatus.RPM > trueTaperMin)
+            //The RPM settings are stored divided by 100, so we use RPMdiv100:
+            if (currentStatus.RPMdiv100 > configPage2.aeTaperMin)
             {
-              if(currentStatus.RPM > trueTaperMax) { accelValue = 0; } //RPM is beyond taper max limit, so accel enrich is turned off
+              if(currentStatus.RPMdiv100 > configPage2.aeTaperMax) { accelValue = 0; } //RPM is beyond taper max limit, so accel enrich is turned off
               else 
               {
-                int16_t taperRange = trueTaperMax - trueTaperMin;
-                int16_t taperPercent = ((currentStatus.RPM - trueTaperMin) * 100UL) / taperRange; //The percentage of the way through the RPM taper range
+                int16_t taperRange = configPage2.aeTaperMax - configPage2.aeTaperMin;
+                int16_t taperPercent = ((currentStatus.RPMdiv100 - configPage2.aeTaperMin) * 100UL) / taperRange; //The percentage of the way through the RPM taper range
                 accelValue = percentage((100-taperPercent), accelValue); //Calculate the above percentage of the calculated accel amount. 
               }
             }
@@ -435,16 +433,14 @@ uint16_t correctionAccel(void)
             BIT_SET(currentStatus.engine, BIT_ENGINE_ACC); //Mark acceleration enrichment as active.
             accelValue = table2D_getValue(&taeTable, currentStatus.tpsDOT / 10); //The x-axis of tae table is divided by 10 to fit values in byte.
             //Apply the RPM taper to the above
-            //The RPM settings are stored divided by 100:
-            uint16_t trueTaperMin = configPage2.aeTaperMin * 100;
-            uint16_t trueTaperMax = configPage2.aeTaperMax * 100;
-            if (currentStatus.RPM > trueTaperMin)
+            //The RPM settings are stored divided by 100, so we use RPMdiv100:
+            if (currentStatus.RPMdiv100 > configPage2.aeTaperMin)
             {
-              if(currentStatus.RPM > trueTaperMax) { accelValue = 0; } //RPM is beyond taper max limit, so accel enrich is turned off
+              if(currentStatus.RPMdiv100 > configPage2.aeTaperMax) { accelValue = 0; } //RPM is beyond taper max limit, so accel enrich is turned off
               else 
               {
-                int16_t taperRange = trueTaperMax - trueTaperMin;
-                int16_t taperPercent = ((currentStatus.RPM - trueTaperMin) * 100UL) / taperRange; //The percentage of the way through the RPM taper range
+                int16_t taperRange = configPage2.aeTaperMax - configPage2.aeTaperMin;
+                int16_t taperPercent = ((currentStatus.RPMdiv100 - configPage2.aeTaperMin) * 100UL) / taperRange; //The percentage of the way through the RPM taper range
                 accelValue = percentage( (100 - taperPercent), accelValue); //Calculate the above percentage of the calculated accel amount. 
               }
             }
