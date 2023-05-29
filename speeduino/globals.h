@@ -39,8 +39,8 @@
 #endif
   #define CORE_AVR
   #define BOARD_H "board_avr2560.h"
-  #define INJ_CHANNELS 4
-  #define IGN_CHANNELS 5
+  #define INJ_CHANNELS 6
+  #define IGN_CHANNELS 3
 
   #if defined(__AVR_ATmega2561__)
     //This is a workaround to avoid having to change all the references to higher ADC channels. We simply define the channels (Which don't exist on the 2561) as being the same as A0-A7
@@ -83,7 +83,7 @@
 
 //Select one for EEPROM,the default is EEPROM emulation on internal flash.
 //#define SRAM_AS_EEPROM /*Use 4K battery backed SRAM, requires a 3V continuous source (like battery) connected to Vbat pin */
-//#define USE_SPI_EEPROM PB0 /*Use M25Qxx SPI flash */
+//#define USE_SPI_EEPROM PE1 /*Use M25Qxx SPI flash */
 //#define FRAM_AS_EEPROM /*Use FRAM like FM25xxx, MB85RSxxx or any SPI compatible */
 
   #ifndef word
