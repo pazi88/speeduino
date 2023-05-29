@@ -44,6 +44,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "canBroadcast.h"
 #include "SD_logger.h"
 #include "schedule_calcs.h"
+#include "auxiliaries.h"
 #include RTC_LIB_H //Defined in each boards .h file
 #include BOARD_H //Note that this is not a real file, it is defined in globals.h. 
 
@@ -70,7 +71,7 @@ void setup(void)
 inline uint16_t applyFuelTrimToPW(trimTable3d *pTrimTable, int16_t fuelLoad, int16_t RPM, uint16_t currentPW)
 {
     unsigned long pw1percent = 100 + get3DTableValue(pTrimTable, fuelLoad, RPM) - OFFSET_FUELTRIM;
-    if (pw1percent != 100) { return div100(pw1percent * currentPW); }
+    if (pw1percent != 100) { return div100(uint32_t(pw1percent * currentPW)); }
     return currentPW;
 }
 
@@ -122,12 +123,13 @@ void loop(void)
       #if defined (NATIVE_CAN_AVAILABLE)
           //currentStatus.canin[12] = configPage9.enable_intcan;
           if (configPage9.enable_intcan == 1) // use internal can module
-          {
+          {            
             //check local can module
             // if ( BIT_CHECK(LOOP_TIMER, BIT_TIMER_15HZ) or (CANbus0.available())
             while (Can0.read(inMsg) ) 
             {
               can_Command();
+              readAuxCanBus();
               //Can0.read(inMsg);
               //currentStatus.canin[12] = inMsg.buf[5];
               //currentStatus.canin[13] = inMsg.id;
@@ -186,7 +188,7 @@ void loop(void)
       //This is a safety check. If for some reason the interrupts have got screwed up (Leading to 0rpm), this resets them.
       //It can possibly be run much less frequently.
       //This should only be run if the high speed logger are off because it will change the trigger interrupts back to defaults rather than the logger versions
-      if( (currentStatus.toothLogEnabled == false) && (currentStatus.compositeLogEnabled == false) ) { initialiseTriggers(); }
+      if( (currentStatus.toothLogEnabled == false) && (currentStatus.compositeTriggerUsed == 0) ) { initialiseTriggers(); }
 
       VVT1_PIN_LOW();
       VVT2_PIN_LOW();
@@ -197,7 +199,11 @@ void loop(void)
 
     //***Perform sensor reads***
     //-----------------------------------------------------------------------------------------------------
-    readMAP();  
+    if (BIT_CHECK(LOOP_TIMER, BIT_TIMER_1KHZ)) //Every 1ms. NOTE: This is NOT guaranteed to run at 1kHz on AVR systems. It will run at 1kHz if possible or as fast as loops/s allows if not. 
+    {
+      BIT_CLEAR(TIMER_mask, BIT_TIMER_1KHZ);
+      readMAP();
+    }
     
     if (BIT_CHECK(LOOP_TIMER, BIT_TIMER_15HZ)) //Every 32 loops
     {
@@ -307,6 +313,7 @@ void loop(void)
 
       #ifdef SD_LOGGING
         if(configPage13.onboard_log_file_rate == LOGGER_RATE_4HZ) { writeSDLogEntry(); }
+        syncSDLog(); //Sync the SD log file to the card 4 times per second. 
       #endif  
       
       currentStatus.fuelPressure = getFuelPressure();
@@ -430,14 +437,17 @@ void loop(void)
         }
         else
         {  
-          //Sets the engine cranking bit, clears the engine running bit
-          BIT_SET(currentStatus.engine, BIT_ENGINE_CRANK);
-          BIT_CLEAR(currentStatus.engine, BIT_ENGINE_RUN);
-          currentStatus.runSecs = 0; //We're cranking (hopefully), so reset the engine run time to prompt ASE.
-          if(configPage4.ignBypassEnabled > 0) { digitalWrite(pinIgnBypass, LOW); }
+          if( !BIT_CHECK(currentStatus.engine, BIT_ENGINE_RUN) || (currentStatus.RPM < (currentStatus.crankRPM - CRANK_RUN_HYSTER)) )
+          {
+            //Sets the engine cranking bit, clears the engine running bit
+            BIT_SET(currentStatus.engine, BIT_ENGINE_CRANK);
+            BIT_CLEAR(currentStatus.engine, BIT_ENGINE_RUN);
+            currentStatus.runSecs = 0; //We're cranking (hopefully), so reset the engine run time to prompt ASE.
+            if(configPage4.ignBypassEnabled > 0) { digitalWrite(pinIgnBypass, LOW); }
 
-          //Check whether the user has selected to disable to the fan during cranking
-          if(configPage2.fanWhenCranking == 0) { FAN_OFF(); }
+            //Check whether the user has selected to disable to the fan during cranking
+            if(configPage2.fanWhenCranking == 0) { FAN_OFF(); }
+          }
         }
       //END SETTING ENGINE STATUSES
       //-----------------------------------------------------------------------------------------------------
