@@ -285,8 +285,9 @@ void loop(void)
       #if TPS_READ_FREQUENCY == 30
         readTPS();
       #endif
-      readO2();
-      readO2_2();
+
+      currentStatus.fuelPressure = getFuelPressure();
+      currentStatus.oilPressure = getOilPressure();
 
       #ifdef SD_LOGGING
         if(configPage13.onboard_log_file_rate == LOGGER_RATE_30HZ) { writeSDLogEntry(); }
@@ -300,8 +301,6 @@ void loop(void)
       BIT_CLEAR(TIMER_mask, BIT_TIMER_4HZ);
       //The IAT and CLT readings can be done less frequently (4 times per second)
       readCLT();
-      readIAT();
-      readBat();
       nitrousControl();
 
       //Lookup the current target idle RPM. This is aligned with coolant and so needs to be calculated at the same rate CLT is read
@@ -315,9 +314,6 @@ void loop(void)
         if(configPage13.onboard_log_file_rate == LOGGER_RATE_4HZ) { writeSDLogEntry(); }
         syncSDLog(); //Sync the SD log file to the card 4 times per second. 
       #endif  
-      
-      currentStatus.fuelPressure = getFuelPressure();
-      currentStatus.oilPressure = getOilPressure();
       
       if(auxIsEnabled == true)
       {
@@ -400,6 +396,25 @@ void loop(void)
       #endif
 
     } //1Hz timer
+    if(BIT_CHECK(LOOP_TIMER, BIT_TIMER_50HZ)) //50 hertz
+    {
+      BIT_CLEAR(TIMER_mask, BIT_TIMER_50HZ);
+      readIAT();
+      readO2();
+      readO2_2();
+      readBat();
+      #if TPS_READ_FREQUENCY == 50
+        readTPS();
+      #endif
+    } //50Hz timer
+
+    if(BIT_CHECK(LOOP_TIMER, BIT_TIMER_100HZ)) //100 hertz
+    {
+      BIT_CLEAR(TIMER_mask, BIT_TIMER_100HZ);
+      #if TPS_READ_FREQUENCY == 100
+        readTPS();
+      #endif
+    } //100Hz timer
 
     if( (configPage6.iacAlgorithm == IAC_ALGORITHM_STEP_OL)
     || (configPage6.iacAlgorithm == IAC_ALGORITHM_STEP_CL)

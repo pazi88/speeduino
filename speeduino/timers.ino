@@ -28,6 +28,8 @@ Timers are typically low resolution (Compared to Schedulers), with maximum frequ
 void initialiseTimers(void)
 {
   lastRPM_100ms = 0;
+  loop10ms = 0;
+  loop20ms = 0;
   loop33ms = 0;
   loop66ms = 0;
   loop100ms = 0;
@@ -50,6 +52,8 @@ void oneMSInterval(void) //Most ARM chips can simply call a function
   ms_counter++;
 
   //Increment Loop Counters
+  loop10ms++;
+  loop20ms++;
   loop33ms++;
   loop66ms++;
   loop100ms++;
@@ -120,6 +124,20 @@ void oneMSInterval(void) //Most ARM chips can simply call a function
       tachoOutputFlag = TACHO_INACTIVE;
     }
   }  
+
+  //100Hz loop
+  if (loop10ms == 10)
+  {
+    loop10ms = 0;
+    BIT_SET(TIMER_mask, BIT_TIMER_100HZ);
+  }
+
+  //50Hz loop
+  if (loop20ms == 20)
+  {
+    loop20ms = 0;
+    BIT_SET(TIMER_mask, BIT_TIMER_50HZ);
+  }
 
   //30Hz loop
   if (loop33ms == 33)

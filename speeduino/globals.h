@@ -83,7 +83,7 @@
 
 //Select one for EEPROM,the default is EEPROM emulation on internal flash.
 //#define SRAM_AS_EEPROM /*Use 4K battery backed SRAM, requires a 3V continuous source (like battery) connected to Vbat pin */
-//#define USE_SPI_EEPROM PB0 /*Use M25Qxx SPI flash */
+//#define USE_SPI_EEPROM PE1 /*Use M25Qxx SPI flash */
 //#define FRAM_AS_EEPROM /*Use FRAM like FM25xxx, MB85RSxxx or any SPI compatible */
 
   #ifndef word
@@ -210,6 +210,8 @@
 #define BIT_TIMER_10HZ            2
 #define BIT_TIMER_15HZ            3
 #define BIT_TIMER_30HZ            4
+#define BIT_TIMER_50HZ            5
+#define BIT_TIMER_100HZ           6
 #define BIT_TIMER_1KHZ            7
 
 #define BIT_STATUS3_RESET_PREVENT 0 //Indicates whether reset prevention is enabled

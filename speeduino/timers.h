@@ -35,6 +35,8 @@ volatile uint16_t tachoSweepAccum;
 #define TACHO_SWEEP_RAMP_MS (TACHO_SWEEP_TIME_MS * 2 / 3)
 #define MS_PER_SEC  1000
 
+volatile byte loop10ms;
+volatile byte loop20ms;
 volatile byte loop33ms;
 volatile byte loop66ms;
 volatile byte loop100ms;
