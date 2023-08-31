@@ -1,3 +1,6 @@
+#include "globals.h"
+#include BOARD_H
+
 #ifdef SD_LOGGING
 #include <SPI.h>
 #ifdef __SD_H__
@@ -8,6 +11,7 @@
 #include "SD_logger.h"
 #include "logger.h"
 #include "rtc_common.h"
+#include "maths.h"
 
 SdExFat sd;
 ExFile logFile;
@@ -73,7 +77,7 @@ bool createLogFile()
   //Create the filename
   sprintf(filenameBuffer, "%s%04d.%s", LOG_FILE_PREFIX, currentLogFileNumber, LOG_FILE_EXTENSION);
 
-  //if (!logFile.open(LOG_FILENAME, O_RDWR | O_CREAT | O_TRUNC)) 
+  logFile.close();
   if (logFile.open(filenameBuffer, O_RDWR | O_CREAT | O_TRUNC)) 
   {
     returnValue = true;
@@ -173,6 +177,9 @@ void readSDSectors(uint8_t* buffer, uint32_t sectorNumber, uint16_t sectorCount)
   sd.card()->readSectors(sectorNumber, buffer, sectorCount);
 }
 
+// Forward declare
+void writeSDLogHeader();
+
 void beginSDLogging()
 {
   if(SD_status == SD_STATUS_READY)
@@ -183,12 +190,16 @@ void beginSDLogging()
     if (!createLogFile()) 
     {
       SD_status = SD_STATUS_ERROR_NO_WRITE;
+      setTS_SD_status();
+      return;
     }
 
     //Perform pre-allocation on card. This dramatically improves write speed
     if (!logFile.preAllocate(SD_LOG_FILE_SIZE)) 
     {
       SD_status = SD_STATUS_ERROR_NO_SPACE;
+      setTS_SD_status();
+      return;
     }
 
     //initialise the RingBuf.
@@ -204,7 +215,7 @@ void beginSDLogging()
 
 void endSDLogging()
 {
-  if(SD_status > 0)
+  if(SD_status == SD_STATUS_ACTIVE)
   {
     // Write any RingBuf data to file.
     rb.sync();
@@ -214,8 +225,13 @@ void endSDLogging()
     logFile.sync(); //This is required to update the sd object. Without this any subsequent logfiles will overwrite this one
 
     SD_status = SD_STATUS_READY;
+    setTS_SD_status();
   }
 }
+
+// Forward declare
+void checkForSDStart();
+void checkForSDStop();
 
 void writeSDLogEntry()
 {
@@ -242,7 +258,13 @@ void writeSDLogEntry()
     //Write the line to the ring buffer
     for(byte x=0; x<SD_LOG_NUM_FIELDS; x++)
     {
-      rb.print(getReadableLogEntry(x));
+      #if FPU_MAX_SIZE >= 32
+        float entryValue = getReadableFloatLogEntry(x);
+        if(IS_INTEGER(entryValue)) { rb.print((uint16_t)entryValue); }
+        else { rb.print(entryValue); }
+      #else
+        rb.print(getReadableLogEntry(x));
+      #endif
       if(x < (SD_LOG_NUM_FIELDS - 1)) { rb.print(","); }
     }
     rb.println("");
@@ -312,7 +334,6 @@ void setTS_SD_status()
 
   BIT_SET(currentStatus.TS_SD_Status, SD_STATUS_CARD_FS); // CARD has a FAT32 filesystem (Though this will be exFAT)
   BIT_CLEAR(currentStatus.TS_SD_Status, SD_STATUS_CARD_UNUSED); //Unused bit is always 0
-
 }
 
 /** 
@@ -323,42 +344,48 @@ void checkForSDStart()
   //Logging can only start if we're in the ready state
   //We must check the SD_status each time to prevent trying to init a new log file multiple times
 
-  //Check for enable at boot
-  if( (configPage13.onboard_log_trigger_boot) && (SD_status == SD_STATUS_READY) )
+  if(configPage13.onboard_log_file_style > 0)
   {
-    //Check that we're not already finished the logging
-    if((millis() / 1000) <= configPage13.onboard_log_tr1_duration)
+    //Check for enable at boot
+    if( (configPage13.onboard_log_trigger_boot) && (SD_status == SD_STATUS_READY) )
     {
-      beginSDLogging(); //Setup the log file, preallocation, header row
-    }    
-  }
-
-  //Check for RPM based Enable
-  if( (configPage13.onboard_log_trigger_RPM) && (SD_status == SD_STATUS_READY) )
-  {
-    if( (currentStatus.RPMdiv100 >= configPage13.onboard_log_tr2_thr_on) && (currentStatus.RPMdiv100 <= configPage13.onboard_log_tr2_thr_off) ) //Need to check both on and off conditions to prevent logging starting and stopping continually
-    {
-      beginSDLogging(); //Setup the log file, preallocation, header row
+      //Check that we're not already finished the logging
+      if((millis() / 1000) <= configPage13.onboard_log_tr1_duration)
+      {
+        beginSDLogging(); //Setup the log file, preallocation, header row
+      }    
     }
-  }
 
-  //Check for engine protection based enable
-  if((configPage13.onboard_log_trigger_prot) && (SD_status == SD_STATUS_READY) )
-  {
-    if(currentStatus.engineProtectStatus > 0)
+    //Check for RPM based Enable
+    if( (configPage13.onboard_log_trigger_RPM) && (SD_status == SD_STATUS_READY) )
     {
-      beginSDLogging(); //Setup the log file, preallocation, header row
+      if( (currentStatus.RPMdiv100 >= configPage13.onboard_log_tr2_thr_on) && (currentStatus.RPMdiv100 <= configPage13.onboard_log_tr2_thr_off) ) //Need to check both on and off conditions to prevent logging starting and stopping continually
+      {
+        beginSDLogging(); //Setup the log file, preallocation, header row
+      }
     }
-  }
 
-  if( (configPage13.onboard_log_trigger_Vbat) && (SD_status == SD_STATUS_READY) )
-  {
+    //Check for engine protection based enable
+    if((configPage13.onboard_log_trigger_prot) && (SD_status == SD_STATUS_READY) )
+    {
+      if(currentStatus.engineProtectStatus > 0)
+      {
+        beginSDLogging(); //Setup the log file, preallocation, header row
+      }
+    }
 
-  }
+    if( (configPage13.onboard_log_trigger_Vbat) && (SD_status == SD_STATUS_READY) )
+    {
 
-  if(( configPage13.onboard_log_trigger_Epin) && (SD_status == SD_STATUS_READY) )
-  {
+    }
 
+    if((configPage13.onboard_log_trigger_Epin) && (SD_status == SD_STATUS_READY) )
+    {
+      if(digitalRead(pinSDEnable) == LOW)
+      {
+        beginSDLogging(); //Setup the log file, preallocation, header row
+      }
+    }
   }
 }
 
@@ -372,6 +399,7 @@ void checkForSDStop()
   bool log_RPM = false;
   bool log_prot = false;
   bool log_Vbat = false;
+  bool log_Epin = false;
 
   //Logging only needs to be stopped if already active
   if(SD_status == SD_STATUS_ACTIVE)
@@ -404,14 +432,33 @@ void checkForSDStop()
 
     }
 
-    //Check all conditions to see if we should stop logging
-    if( (log_boot == false) && (log_RPM == false) && (log_prot == false) && (log_Vbat == false) && (manualLogActive == false) )
+    //External Pin
+    if(configPage13.onboard_log_trigger_Epin)
     {
-      endSDLogging(); //Setup the log file, preallocation, header row
+      if(digitalRead(pinSDEnable) == LOW)
+      {
+        log_Epin = true;
+      }
     }
+
+    //Check all conditions to see if we should stop logging
+    if( (log_boot == false) && (log_RPM == false) && (log_prot == false) && (log_Vbat == false) && (log_Epin == false) && (manualLogActive == false) )
+    {
+      endSDLogging();
+    }
+    //ALso check whether logging has been disabled entirely
+    if(configPage13.onboard_log_file_style == 0) { endSDLogging(); }
   }
 
   
+}
+
+void syncSDLog()
+{     
+  if( (SD_status == SD_STATUS_ACTIVE) && (!logFile.isBusy()) && (!sd.isBusy()) )
+  {
+    logFile.sync();
+  }
 }
 
 /** 

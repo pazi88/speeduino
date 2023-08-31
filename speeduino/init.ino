@@ -11,6 +11,7 @@
 #include "utilities.h"
 #include "scheduledIO.h"
 #include "scheduler.h"
+#include "schedule_calcs.h"
 #include "auxiliaries.h"
 #include "sensors.h"
 #include "decoders.h"
@@ -45,7 +46,7 @@
  * - Read CLT and TPS sensors to have cranking pulsewidths computed correctly
  * - Mark Initialisation completed (this flag-marking is used in code to prevent after-init changes)
  */
-void initialiseAll()
+void initialiseAll(void)
 {   
     fpPrimed = false;
     injPrimed = false;
@@ -93,9 +94,13 @@ void initialiseAll()
       } 
     }
     #endif
-    
+  
+    // Unit tests should be independent of any stored configuration on the board!
+#if !defined(UNIT_TEST)
     loadConfig();
     doUpdates(); //Check if any data items need updating (Occurs with firmware updates)
+#endif
+
 
     //Always start with a clean slate on the bootloader capabilities level
     //This should be 0 until we hear otherwise from the 16u2
@@ -103,12 +108,14 @@ void initialiseAll()
     
     initBoard(); //This calls the current individual boards init function. See the board_xxx.ino files for these.
     initialiseTimers();
+    
   #ifdef SD_LOGGING
     initRTC();
     initSD();
   #endif
 
     Serial.begin(115200);
+    BIT_SET(currentStatus.status4, BIT_STATUS4_ALLOW_LEGACY_COMMS); //Flag legacy comms as being allowed on startip
     #if defined(CANSerial_AVAILABLE)
       if (configPage9.enable_secondarySerial == 1) { CANSerial.begin(115200); }
     #endif
@@ -252,6 +259,12 @@ void initialiseAll()
     fanPWMTable.values = configPage9.PWMFanDuty;
     fanPWMTable.axisX = configPage6.fanPWMBins;
 
+    rollingCutTable.valueSize = SIZE_BYTE;
+    rollingCutTable.axisSize = SIZE_SIGNED_BYTE; //X axis is SIGNED for this table. 
+    rollingCutTable.xSize = 4;
+    rollingCutTable.values = configPage15.rollingProtCutPercent;
+    rollingCutTable.axisX = configPage15.rollingProtRPMDelta;
+
     wmiAdvTable.valueSize = SIZE_BYTE;
     wmiAdvTable.axisSize = SIZE_BYTE; //Set this table to use byte axis bins
     wmiAdvTable.xSize = 6;
@@ -275,7 +288,7 @@ void initialiseAll()
     o2CalibrationTable.xSize = 32;
     o2CalibrationTable.values = o2Calibration_values;
     o2CalibrationTable.axisX = o2Calibration_bins;
-
+    
     //Setup the calibration tables
     loadCalibration();
 
@@ -363,8 +376,9 @@ void initialiseAll()
     //Perform all initialisations
     initialiseSchedulers();
     //initialiseDisplay();
-    initialiseIdle();
+    initialiseIdle(true);
     initialiseFan();
+    initialiseAirCon();
     initialiseAuxPWM();
     initialiseCorrections();
     BIT_CLEAR(currentStatus.engineProtectStatus, PROTECT_IO_ERROR); //Clear the I/O error bit. The bit will be set in initialiseADC() if there is problem in there.
@@ -442,6 +456,10 @@ void initialiseAll()
     noInterrupts();
     initialiseTriggers();
 
+    //The secondary input can be used for VSS if nothing else requires it. Allows for the standard VR conditioner to be used for VSS. This MUST be run after the initialiseTriggers() function
+    if( VSS_USES_RPM2() ) { attachInterrupt(digitalPinToInterrupt(pinVSS), vssPulse, RISING); } //Secondary trigger input can safely be used for VSS
+    if( FLEX_USES_RPM2() ) { attachInterrupt(digitalPinToInterrupt(pinFlex), flexPulse, CHANGE); } //Secondary trigger input can safely be used for Flex sensor
+
     //End crank trigger interrupt attachment
     if(configPage2.strokes == FOUR_STROKE)
     {
@@ -453,31 +471,33 @@ void initialiseAll()
     currentLoopTime = micros_safe();
     mainLoopCount = 0;
 
-    currentStatus.nSquirts = configPage2.nCylinders / configPage2.divider; //The number of squirts being requested. This is manually overridden below for sequential setups (Due to TS req_fuel calc limitations)
+    if(configPage2.divider == 0) { currentStatus.nSquirts = 2; } //Safety check.
+    else { currentStatus.nSquirts = configPage2.nCylinders / configPage2.divider; } //The number of squirts being requested. This is manually overridden below for sequential setups (Due to TS req_fuel calc limitations)
     if(currentStatus.nSquirts == 0) { currentStatus.nSquirts = 1; } //Safety check. Should never happen as TS will give an error, but leave in case tune is manually altered etc. 
 
     //Calculate the number of degrees between cylinders
     //Set some default values. These will be updated below if required.
-    CRANK_ANGLE_MAX = 720;
     CRANK_ANGLE_MAX_IGN = 360;
     CRANK_ANGLE_MAX_INJ = 360;
-    channel1InjEnabled = true;
-    channel2InjEnabled = false;
-    channel3InjEnabled = false;
-    channel4InjEnabled = false;
-    channel5InjEnabled = false;
-    channel6InjEnabled = false;
-    channel7InjEnabled = false;
-    channel8InjEnabled = false;
+
+    maxInjOutputs = 1; // Disable all injectors expect channel 1
 
     ignition1EndAngle = 0;
     ignition2EndAngle = 0;
     ignition3EndAngle = 0;
     ignition4EndAngle = 0;
+#if IGN_CHANNELS >= 5
     ignition5EndAngle = 0;
+#endif
+#if IGN_CHANNELS >= 6
     ignition6EndAngle = 0;
+#endif
+#if IGN_CHANNELS >= 7
     ignition7EndAngle = 0;
+#endif
+#if IGN_CHANNELS >= 8
     ignition8EndAngle = 0;
+#endif
 
     if(configPage2.strokes == FOUR_STROKE) { CRANK_ANGLE_MAX_INJ = 720 / currentStatus.nSquirts; }
     else { CRANK_ANGLE_MAX_INJ = 360 / currentStatus.nSquirts; }
@@ -487,6 +507,7 @@ void initialiseAll()
         channel1IgnDegrees = 0;
         channel1InjDegrees = 0;
         maxIgnOutputs = 1;
+        maxInjOutputs = 1;
 
         //Sequential ignition works identically on a 1 cylinder whether it's odd or even fire. 
         if( (configPage4.sparkMode == IGN_MODE_SEQUENTIAL) && (configPage2.strokes == FOUR_STROKE) ) { CRANK_ANGLE_MAX_IGN = 720; }
@@ -498,13 +519,11 @@ void initialiseAll()
           req_fuel_uS = req_fuel_uS * 2;
         }
 
-        channel1InjEnabled = true;
-
         //Check if injector staging is enabled
         if(configPage10.stagingEnabled == true)
         {
-          channel3InjEnabled = true;
-          channel3InjDegrees = channel1InjDegrees;
+          maxInjOutputs = 2;
+          channel2InjDegrees = channel1InjDegrees;
         }
         break;
 
@@ -512,6 +531,7 @@ void initialiseAll()
         channel1IgnDegrees = 0;
         channel1InjDegrees = 0;
         maxIgnOutputs = 2;
+        maxInjOutputs = 2;
         if (configPage2.engineType == EVEN_FIRE ) { channel2IgnDegrees = 180; }
         else { channel2IgnDegrees = configPage2.oddfire2; }
 
@@ -534,14 +554,10 @@ void initialiseAll()
           channel2InjDegrees = 0; 
         }
 
-        channel1InjEnabled = true;
-        channel2InjEnabled = true;
-
         //Check if injector staging is enabled
         if(configPage10.stagingEnabled == true)
         {
-          channel3InjEnabled = true;
-          channel4InjEnabled = true;
+          maxInjOutputs = 4;
 
           channel3InjDegrees = channel1InjDegrees;
           channel4InjDegrees = channel2InjDegrees;
@@ -552,30 +568,31 @@ void initialiseAll()
     case 3:
         channel1IgnDegrees = 0;
         maxIgnOutputs = 3;
+        maxInjOutputs = 3;
         if (configPage2.engineType == EVEN_FIRE )
         {
-        //Sequential and Single channel modes both run over 720 crank degrees, but only on 4 stroke engines.
-        if( ( (configPage4.sparkMode == IGN_MODE_SEQUENTIAL) || (configPage4.sparkMode == IGN_MODE_SINGLE) ) && (configPage2.strokes == FOUR_STROKE) )
-        {
-          channel2IgnDegrees = 240;
-          channel3IgnDegrees = 480;
+          //Sequential and Single channel modes both run over 720 crank degrees, but only on 4 stroke engines.
+          if( ( (configPage4.sparkMode == IGN_MODE_SEQUENTIAL) || (configPage4.sparkMode == IGN_MODE_SINGLE) ) && (configPage2.strokes == FOUR_STROKE) )
+          {
+            channel2IgnDegrees = 240;
+            channel3IgnDegrees = 480;
 
-          CRANK_ANGLE_MAX_IGN = 720;
+            CRANK_ANGLE_MAX_IGN = 720;
+          }
+          else
+          {
+            channel2IgnDegrees = 120;
+            channel3IgnDegrees = 240;
+          }
         }
         else
         {
-          channel2IgnDegrees = 120;
-          channel3IgnDegrees = 240;
-        }
-        }
-        else
-        {
-        channel2IgnDegrees = configPage2.oddfire2;
-        channel3IgnDegrees = configPage2.oddfire3;
+          channel2IgnDegrees = configPage2.oddfire2;
+          channel3IgnDegrees = configPage2.oddfire3;
         }
 
         //For alternating injection, the squirt occurs at different times for each channel
-        if( (configPage2.injLayout == INJ_SEMISEQUENTIAL) || (configPage2.injLayout == INJ_PAIRED) || (configPage2.strokes == TWO_STROKE) )
+        if( (configPage2.injLayout == INJ_SEMISEQUENTIAL) || (configPage2.injLayout == INJ_PAIRED) )
         {
           channel1InjDegrees = 0;
           channel2InjDegrees = 120;
@@ -598,22 +615,53 @@ void initialiseAll()
         }
         else if (configPage2.injLayout == INJ_SEQUENTIAL)
         {
-          channel1InjDegrees = 0;
-          channel2InjDegrees = 240;
-          channel3InjDegrees = 480;
-          CRANK_ANGLE_MAX_INJ = 720;
           currentStatus.nSquirts = 1;
-          req_fuel_uS = req_fuel_uS * 2;
+
+          if(configPage2.strokes == TWO_STROKE)
+          {
+            channel1InjDegrees = 0;
+            channel2InjDegrees = 120;
+            channel3InjDegrees = 240;
+            CRANK_ANGLE_MAX_INJ = 360;
+          }
+          else
+          {
+            req_fuel_uS = req_fuel_uS * 2;
+            channel1InjDegrees = 0;
+            channel2InjDegrees = 240;
+            channel3InjDegrees = 480;
+            CRANK_ANGLE_MAX_INJ = 720;
+          }
+        }
+        else
+        {
+          //Should never happen, but default values
+          channel1InjDegrees = 0;
+          channel2InjDegrees = 120;
+          channel3InjDegrees = 240;
         }
 
-        channel1InjEnabled = true;
-        channel2InjEnabled = true;
-        channel3InjEnabled = true;
+        //Check if injector staging is enabled
+        if(configPage10.stagingEnabled == true)
+        {
+          #if INJ_CHANNELS >= 6
+            maxInjOutputs = 6;
+
+            channel4InjDegrees = channel1InjDegrees;
+            channel5InjDegrees = channel2InjDegrees;
+            channel6InjDegrees = channel3InjDegrees;
+          #else
+            //Staged output is on channel 4
+            maxInjOutputs = 4;
+            channel4InjDegrees = channel1InjDegrees;
+          #endif
+        }
         break;
     case 4:
         channel1IgnDegrees = 0;
         channel1InjDegrees = 0;
         maxIgnOutputs = 2; //Default value for 4 cylinder, may be changed below
+        maxInjOutputs = 2;
         if (configPage2.engineType == EVEN_FIRE )
         {
           channel2IgnDegrees = 180;
@@ -626,7 +674,7 @@ void initialiseAll()
             CRANK_ANGLE_MAX_IGN = 720;
             maxIgnOutputs = 4;
           }
-          else if(configPage4.sparkMode == IGN_MODE_ROTARY)
+          if(configPage4.sparkMode == IGN_MODE_ROTARY)
           {
             //Rotary uses the ign 3 and 4 schedules for the trailing spark. They are offset from the ign 1 and 2 channels respectively and so use the same degrees as them
             channel3IgnDegrees = 0;
@@ -660,6 +708,7 @@ void initialiseAll()
             //Adjust the injection angles based on the number of squirts
             channel2InjDegrees = (channel2InjDegrees * 2) / currentStatus.nSquirts;
           }
+          else { } //Do nothing, default values are correct
         }
         else if (configPage2.injLayout == INJ_SEQUENTIAL)
         {
@@ -667,26 +716,49 @@ void initialiseAll()
           channel3InjDegrees = 360;
           channel4InjDegrees = 540;
 
-          channel3InjEnabled = true;
-          channel4InjEnabled = true;
+          maxInjOutputs = 4;
 
           CRANK_ANGLE_MAX_INJ = 720;
           currentStatus.nSquirts = 1;
           req_fuel_uS = req_fuel_uS * 2;
         }
+        else
+        {
+          //Should never happen, but default values
+          maxInjOutputs = 2;
+        }
 
         //Check if injector staging is enabled
         if(configPage10.stagingEnabled == true)
         {
-          channel3InjEnabled = true;
-          channel4InjEnabled = true;
+          maxInjOutputs = 4;
 
-          channel3InjDegrees = channel1InjDegrees;
-          channel4InjDegrees = channel2InjDegrees;
+          if( (configPage2.injLayout == INJ_SEQUENTIAL) || (configPage2.injLayout == INJ_SEMISEQUENTIAL) )
+          {
+            //Staging with 4 cylinders semi/sequential requires 8 total channels
+            #if INJ_CHANNELS >= 8
+              maxInjOutputs = 8;
+
+              channel5InjDegrees = channel1InjDegrees;
+              channel6InjDegrees = channel2InjDegrees;
+              channel7InjDegrees = channel3InjDegrees;
+              channel8InjDegrees = channel4InjDegrees;
+            #else
+              //This is an invalid config as there are not enough outputs to support sequential + staging
+              //Put the staging output to the non-existant channel 5
+              #if (INJ_CHANNELS >= 5)
+              maxInjOutputs = 5;
+              channel5InjDegrees = channel1InjDegrees;
+              #endif
+            #endif
+          }
+          else
+          {
+            channel3InjDegrees = channel1InjDegrees;
+            channel4InjDegrees = channel2InjDegrees;
+          }
         }
 
-        channel1InjEnabled = true;
-        channel2InjEnabled = true;
         break;
     case 5:
         channel1IgnDegrees = 0;
@@ -695,6 +767,7 @@ void initialiseAll()
         channel4IgnDegrees = 216;
         channel5IgnDegrees = 288;
         maxIgnOutputs = 5; //Only 4 actual outputs, so that's all that can be cut
+        maxInjOutputs = 4; //Is updated below to 5 if there are enough channels
 
         if(configPage4.sparkMode == IGN_MODE_SEQUENTIAL)
         {
@@ -716,7 +789,9 @@ void initialiseAll()
             channel2InjDegrees = 0;
             channel3InjDegrees = 0;
             channel4InjDegrees = 0;
+#if (INJ_CHANNELS >= 5)
             channel5InjDegrees = 0; 
+#endif
           }
           else
           {
@@ -724,7 +799,9 @@ void initialiseAll()
             channel2InjDegrees = 72;
             channel3InjDegrees = 144;
             channel4InjDegrees = 216;
+#if (INJ_CHANNELS >= 5)
             channel5InjDegrees = 288;
+#endif
 
             //Divide by currentStatus.nSquirts ?
           }
@@ -738,7 +815,7 @@ void initialiseAll()
           channel4InjDegrees = 432;
           channel5InjDegrees = 576;
 
-          channel5InjEnabled = true;
+          maxInjOutputs = 5;
 
           CRANK_ANGLE_MAX_INJ = 720;
           currentStatus.nSquirts = 1;
@@ -746,16 +823,16 @@ void initialiseAll()
         }
     #endif
 
-        channel1InjEnabled = true;
-        channel2InjEnabled = true;
-        channel3InjEnabled = true;
-        channel4InjEnabled = true;
+    #if INJ_CHANNELS >= 6
+          if(configPage10.stagingEnabled == true) { maxInjOutputs = 6; }
+    #endif
         break;
     case 6:
         channel1IgnDegrees = 0;
         channel2IgnDegrees = 120;
         channel3IgnDegrees = 240;
         maxIgnOutputs = 3;
+        maxInjOutputs = 3;
 
     #if IGN_CHANNELS >= 6
         if( (configPage4.sparkMode == IGN_MODE_SEQUENTIAL))
@@ -790,7 +867,7 @@ void initialiseAll()
         }
 
     #if INJ_CHANNELS >= 6
-        else if (configPage2.injLayout == INJ_SEQUENTIAL)
+        if (configPage2.injLayout == INJ_SEQUENTIAL)
         {
           channel1InjDegrees = 0;
           channel2InjDegrees = 120;
@@ -799,19 +876,35 @@ void initialiseAll()
           channel5InjDegrees = 480;
           channel6InjDegrees = 600;
 
-          channel4InjEnabled = true;
-          channel5InjEnabled = true;
-          channel6InjEnabled = true;
+          maxInjOutputs = 6;
 
           CRANK_ANGLE_MAX_INJ = 720;
           currentStatus.nSquirts = 1;
           req_fuel_uS = req_fuel_uS * 2;
         }
-    #endif
+        else if(configPage10.stagingEnabled == true) //Check if injector staging is enabled
+        {
+          maxInjOutputs = 6;
 
-        channel1InjEnabled = true;
-        channel2InjEnabled = true;
-        channel3InjEnabled = true;
+          if( (configPage2.injLayout == INJ_SEQUENTIAL) || (configPage2.injLayout == INJ_SEMISEQUENTIAL) )
+          {
+            //Staging with 6 cylinders semi/sequential requires 7 total channels
+            #if INJ_CHANNELS >= 7
+              maxInjOutputs = 7;
+
+              channel5InjDegrees = channel1InjDegrees;
+              channel6InjDegrees = channel2InjDegrees;
+              channel7InjDegrees = channel3InjDegrees;
+              channel8InjDegrees = channel4InjDegrees;
+            #else
+              //This is an invalid config as there are not enough outputs to support sequential + staging
+              //Put the staging output to the non-existant channel 7
+              maxInjOutputs = 7;
+              channel7InjDegrees = channel1InjDegrees;
+            #endif
+          }
+        }
+    #endif
         break;
     case 8:
         channel1IgnDegrees = 0;
@@ -819,14 +912,15 @@ void initialiseAll()
         channel3IgnDegrees = 180;
         channel4IgnDegrees = 270;
         maxIgnOutputs = 4;
+        maxInjOutputs = 4;
 
-    #if IGN_CHANNELS >= 1
+
         if( (configPage4.sparkMode == IGN_MODE_SINGLE))
         {
-        maxIgnOutputs = 1;
-        CRANK_ANGLE_MAX_IGN = 90;
+          maxIgnOutputs = 4;
+          CRANK_ANGLE_MAX_IGN = 360;
         }
-    #endif
+    
 
     #if IGN_CHANNELS >= 8
         if( (configPage4.sparkMode == IGN_MODE_SEQUENTIAL))
@@ -877,10 +971,7 @@ void initialiseAll()
           channel7InjDegrees = 540;
           channel8InjDegrees = 630;
 
-          channel5InjEnabled = true;
-          channel6InjEnabled = true;
-          channel7InjEnabled = true;
-          channel8InjEnabled = true;
+          maxInjOutputs = 8;
 
           CRANK_ANGLE_MAX_INJ = 720;
           currentStatus.nSquirts = 1;
@@ -888,10 +979,6 @@ void initialiseAll()
         }
     #endif
 
-        channel1InjEnabled = true;
-        channel2InjEnabled = true;
-        channel3InjEnabled = true;
-        channel4InjEnabled = true;
         break;
     default: //Handle this better!!!
         channel1InjDegrees = 0;
@@ -899,17 +986,14 @@ void initialiseAll()
         break;
     }
 
-    if(CRANK_ANGLE_MAX_IGN == CRANK_ANGLE_MAX_INJ) { CRANK_ANGLE_MAX = CRANK_ANGLE_MAX_IGN; } //If both the injector max and ignition max angles are the same, make the overall system max this value
-    else if (CRANK_ANGLE_MAX_IGN > CRANK_ANGLE_MAX_INJ) { CRANK_ANGLE_MAX = CRANK_ANGLE_MAX_IGN; }
-    else { CRANK_ANGLE_MAX = CRANK_ANGLE_MAX_INJ; }
-    currentStatus.status3 = currentStatus.nSquirts << BIT_STATUS3_NSQUIRTS1; //Top 3 bits of the status3 variable are the number of squirts. This must be done after the above section due to nSquirts being forced to 1 for sequential
+    currentStatus.status3 |= currentStatus.nSquirts << BIT_STATUS3_NSQUIRTS1; //Top 3 bits of the status3 variable are the number of squirts. This must be done after the above section due to nSquirts being forced to 1 for sequential
     
     //Special case:
     //3 or 5 squirts per cycle MUST be tracked over 720 degrees. This is because the angles for them (Eg 720/3=240) are not evenly divisible into 360
     //This is ONLY the case on 4 stroke systems
     if( (currentStatus.nSquirts == 3) || (currentStatus.nSquirts == 5) )
     {
-      if(configPage2.strokes == FOUR_STROKE) { CRANK_ANGLE_MAX = 720; }
+      if(configPage2.strokes == FOUR_STROKE) { CRANK_ANGLE_MAX_INJ = 720; }
     }
     
     switch(configPage2.injLayout)
@@ -1202,6 +1286,7 @@ void initialiseAll()
           ign4StartFunction = beginCoil4Charge;
           ign4EndFunction = endCoil4Charge;
         }
+        else { } //No action for other RX ignition modes (Future expansion / MISRA compliant). 
         break;
 
     default:
@@ -1232,8 +1317,15 @@ void initialiseAll()
     readCLT(false); // Need to read coolant temp to make priming pulsewidth work correctly. The false here disables use of the filter
     readTPS(false); // Need to read tps to detect flood clear state
 
+    /* tacho sweep function. */
+    tachoSweepEnabled = (configPage2.useTachoSweep > 0);
+    /* SweepMax is stored as a byte, RPM/100. divide by 60 to convert min to sec (net 5/3).  Multiply by ignition pulses per rev.
+       tachoSweepIncr is also the number of tach pulses per second */
+    tachoSweepIncr = configPage2.tachoSweepMaxRPM * maxIgnOutputs * 5 / 3;
+    
     initialisationComplete = true;
     digitalWrite(LED_BUILTIN, HIGH);
+
 }
 /** Set board / microcontroller specific pin mappings / assignments.
  * The boardID is switch-case compared against raw boardID integers (not enum or defined label, and probably no need for that either)
@@ -1321,6 +1413,8 @@ void setPinMapping(byte boardID)
       pinLaunch = 51; //Can be overwritten below
       pinFlex = 2; // Flex sensor (Must be external interrupt enabled)
       pinResetControl = 50; //Reset control output
+      pinBaro = A5;
+      pinVSS = 20;
 
       #if defined(CORE_TEENSY35)
         pinTrigger = 23;
@@ -1393,6 +1487,38 @@ void setPinMapping(byte boardID)
         pinCoil4 = 29;
         pinCoil3 = 30;
         pinO2 = A22;
+      #elif defined(CORE_TEENSY41)
+        //These are only to prevent lockups or weird behaviour on T4.1 when this board is used as the default
+        pinBaro = A4; 
+        pinMAP = A5;
+        pinTPS = A3; //TPS input pin
+        pinIAT = A0; //IAT sensor pin
+        pinCLT = A1; //CLS sensor pin
+        pinO2 = A2; //O2 Sensor pin
+        pinBat = A15; //Battery reference voltage pin. Needs Alpha4+
+        pinLaunch = 34; //Can be overwritten below
+        pinVSS = 35;
+        pinSpareTemp2 = A16; //WRONG! Needs updating!!
+        pinSpareTemp2 = A17; //WRONG! Needs updating!!
+
+        pinTrigger = 20; //The CAS pin
+        pinTrigger2 = 21; //The Cam Sensor pin
+        pinTrigger3 = 23;
+
+        pinStepperDir = 34;
+        pinStepperStep = 35;
+        
+        pinCoil1 = 31;
+        pinCoil2 = 32;
+        pinCoil4 = 29;
+        pinCoil3 = 30;
+
+        pinTachOut = 28;
+        pinFan = 27;
+        pinFuelPump = 33;
+        pinWMIEmpty = 34;
+        pinWMIIndicator = 35;
+        pinWMIEnabled = 36;
       #elif defined(STM32F407xx)
      //Pin definitions for experimental board Tjeerd 
         //Black F407VE wiki.stm32duino.com/index.php?title=STM32F407
@@ -1503,7 +1629,7 @@ void setPinMapping(byte boardID)
         //https://github.com/stm32duino/Arduino_Core_STM32/blob/master/variants/Generic_F411Cx/variant.h#L28
         //pins PA12, PA11 are used for USB or CAN couldn't be used for GPIO
         //pins PB12, PB13, PB14 and PB15 are used to SPI FLASH
-        //PB2 can't be used as input becuase is BOOT pin
+        //PB2 can't be used as input because it's the BOOT pin
         pinInjector1 = PB7; //Output pin injector 1 is on
         pinInjector2 = PB6; //Output pin injector 2 is on
         pinInjector3 = PB5; //Output pin injector 3 is on
@@ -1834,6 +1960,7 @@ void setPinMapping(byte boardID)
       pinTrigger3 = 20; //The Cam sensor 2 pin
       pinTPS = A2;//TPS input pin
       pinMAP = A3; //MAP sensor pin
+      pinEMAP = A15; //EMAP sensor pin
       pinIAT = A0; //IAT sensor pin
       pinCLT = A1; //CLT sensor pin
       pinO2 = A8; //O2 Sensor pin
@@ -1855,6 +1982,11 @@ void setPinMapping(byte boardID)
       pinFlex = 2; // Flex sensor
       pinResetControl = 43; //Reset control output
       pinVSS = 3; //VSS input pin
+      pinWMIEmpty = 31; //(placeholder)
+      pinWMIIndicator = 33; //(placeholder)
+      pinWMIEnabled = 35; //(placeholder)
+      pinIdleUp = 37; //(placeholder)
+      pinCTPS = A6; //(placeholder)
      #elif defined(STM32F407xx)
       pinInjector1 = PB15; //Output pin injector 1
       pinInjector2 = PB14; //Output pin injector 2
@@ -1876,6 +2008,7 @@ void setPinMapping(byte boardID)
       pinTrigger2 = PD4; //The Cam Sensor pin
       pinTPS = PA2;//TPS input pin
       pinMAP = PA3; //MAP sensor pin
+      pinEMAP = PC5; //EMAP sensor pin
       pinIAT = PA0; //IAT sensor pin
       pinCLT = PA1; //CLS sensor pin
       pinO2 = PB0; //O2 Sensor pin
@@ -1897,6 +2030,11 @@ void setPinMapping(byte boardID)
       pinFlex = PD7; // Flex sensor
       pinResetControl = PB7; //Reset control output
       pinVSS = PB6; //VSS input pin
+      pinWMIEmpty = PD15; //(placeholder)
+      pinWMIIndicator = PD13; //(placeholder)
+      pinWMIEnabled = PE15; //(placeholder)
+      pinIdleUp = PE14; //(placeholder)
+      pinCTPS = PA6; //(placeholder)
      #endif
       break;
 
@@ -2185,6 +2323,11 @@ void setPinMapping(byte boardID)
       pinFan = 25; //Pin for the fan output
       pinResetControl = 46; //Reset control output PLACEHOLDER value for now
 
+      //CS pin number is now set in a compile flag. 
+      // #ifdef USE_SPI_EEPROM
+      //   pinSPIFlash_CS = 6;
+      // #endif
+
       #if defined(CORE_TEENSY35)
         pinTPS = A22; //TPS input pin
         pinIAT = A19; //IAT sensor pin
@@ -2199,7 +2342,33 @@ void setPinMapping(byte boardID)
         pinCLT = A15; //CLS sensor pin
         pinO2 = A16; //O2 Sensor pin
         pinBat = A3; //Battery reference voltage pin. Needs Alpha4+
-        pinLaunch = 34; //Can be overwritten below
+
+        //New pins for the actual T4.1 version of the Dropbear
+        pinBaro = A4; 
+        pinMAP = A5;
+        pinTPS = A3; //TPS input pin
+        pinIAT = A0; //IAT sensor pin
+        pinCLT = A1; //CLS sensor pin
+        pinO2 = A2; //O2 Sensor pin
+        pinBat = A15; //Battery reference voltage pin. Needs Alpha4+
+        pinLaunch = 36;
+        pinFlex = 37; // Flex sensor
+        pinSpareTemp1 = A16; 
+        pinSpareTemp2 = A17;
+
+        pinTrigger = 20; //The CAS pin
+        pinTrigger2 = 21; //The Cam Sensor pin
+
+        pinFuelPump = 5; //Fuel pump output
+        pinTachOut = 8; //Tacho output pin
+
+        pinResetControl = 49; //PLaceholder only. Cannot use 42-47 as these are the SD card
+
+        //CS pin number is now set in a compile flag. 
+        // #ifdef USE_SPI_EEPROM
+        //   pinSPIFlash_CS = 33;
+        // #endif
+
       #endif
 
         pinMC33810_1_CS = 10;
@@ -2224,10 +2393,53 @@ void setPinMapping(byte boardID)
       MC33810_BIT_IGN7 = 6;
       MC33810_BIT_IGN8 = 7;
 
-      //CS pin number is now set in a compile flag. 
-      // #ifdef USE_SPI_EEPROM
-      //   pinSPIFlash_CS = 6;
-      // #endif
+
+
+      #endif
+      break;
+
+    case 56:
+      #if defined(CORE_TEENSY)
+      //Pin mappings for the Bear Cub (Teensy 4.1)
+      pinInjector1 = 6;
+      pinInjector2 = 7;
+      pinInjector3 = 9;
+      pinInjector4 = 8;
+      pinInjector5 = 0; //Not used
+      pinCoil1 = 2;
+      pinCoil2 = 3;
+      pinCoil3 = 4;
+      pinCoil4 = 5;
+
+      pinTrigger = 20; //The CAS pin
+      pinTrigger2 = 21; //The Cam Sensor pin
+      pinFlex = 37; // Flex sensor
+      pinMAP = A5; //MAP sensor pin
+      pinBaro = A4; //Baro sensor pin
+      pinBat = A15; //Battery reference voltage pin
+      pinTPS = A3; //TPS input pin
+      pinIAT = A0; //IAT sensor pin
+      pinCLT = A1; //CLS sensor pin
+      pinO2 = A2; //O2 Sensor pin
+      pinLaunch = 36;
+
+      pinSpareTemp1 = A16; //spare Analog input 1
+      pinSpareTemp2 = A17; //spare Analog input 2
+      pinTachOut = 38; //Tacho output pin
+      pinIdle1 = 27; //Single wire idle control
+      pinIdle2 = 26; //2 wire idle control. Shared with Spare 1 output
+      pinFuelPump = 10; //Fuel pump output
+      pinVVT_1 = 28; //Default VVT output
+      pinStepperDir = 32; //Direction pin  for DRV8825 driver
+      pinStepperStep = 31; //Step pin for DRV8825 driver
+      pinStepperEnable = 30; //Enable pin for DRV8825 driver
+      pinBoost = 24; //Boost control
+      pinSpareLOut1 = 29; //low current output spare1
+      pinSpareLOut2 = 26; //low current output spare2
+      pinSpareLOut3 = 28; //low current output spare3
+      pinSpareLOut4 = 29; //low current output spare4
+      pinFan = 25; //Pin for the fan output
+      pinResetControl = 46; //Reset control output PLACEHOLDER value for now
 
       #endif
       break;
@@ -2580,8 +2792,11 @@ void setPinMapping(byte boardID)
   if ( (configPage10.wmiIndicatorPin != 0) && (configPage10.wmiIndicatorPin < BOARD_MAX_IO_PINS) ) { pinWMIIndicator = pinTranslate(configPage10.wmiIndicatorPin); }
   if ( (configPage10.wmiEnabledPin != 0) && (configPage10.wmiEnabledPin < BOARD_MAX_IO_PINS) ) { pinWMIEnabled = pinTranslate(configPage10.wmiEnabledPin); }
   if ( (configPage10.vvt2Pin != 0) && (configPage10.vvt2Pin < BOARD_MAX_IO_PINS) ) { pinVVT_2 = pinTranslate(configPage10.vvt2Pin); }
+  if ( (configPage13.onboard_log_trigger_Epin != 0 ) && (configPage13.onboard_log_trigger_Epin != 0) && (configPage13.onboard_log_tr5_Epin_pin < BOARD_MAX_IO_PINS) ) { pinSDEnable = pinTranslate(configPage13.onboard_log_tr5_Epin_pin); }
+  
 
   //Currently there's no default pin for Idle Up
+  
   pinIdleUp = pinTranslate(configPage2.idleUpPin);
 
   //Currently there's no default pin for Idle Up Output
@@ -2589,7 +2804,12 @@ void setPinMapping(byte boardID)
 
   //Currently there's no default pin for closed throttle position sensor
   pinCTPS = pinTranslate(configPage2.CTPSPin);
-
+  
+  // Air conditioning control initialisation
+  if (((configPage15.airConCompPin&63) != 0) && ((configPage15.airConCompPin&63) < BOARD_MAX_IO_PINS) ) { pinAirConComp = pinTranslate(configPage15.airConCompPin&63); }
+  if (((configPage15.airConFanPin&63) != 0) && ((configPage15.airConFanPin&63) < BOARD_MAX_IO_PINS) ) { pinAirConFan = pinTranslate(configPage15.airConFanPin&63); }
+  if (((configPage15.airConReqPin&63) != 0) && ((configPage15.airConReqPin&63) < BOARD_MAX_IO_PINS) ) { pinAirConRequest = pinTranslate(configPage15.airConReqPin&63); }
+  
   /* Reset control is a special case. If reset control is enabled, it needs its initial state set BEFORE its pinMode.
      If that doesn't happen and reset control is in "Serial Command" mode, the Arduino will end up in a reset loop
      because the control pin will go low as soon as the pinMode is set to OUTPUT. */
@@ -2736,9 +2956,6 @@ void setPinMapping(byte boardID)
       pinMode(pinBaro, INPUT);
     #endif
   #endif
-  pinMode(pinTrigger, INPUT);
-  pinMode(pinTrigger2, INPUT);
-  pinMode(pinTrigger3, INPUT);
 
   //Each of the below are only set when their relevant function is enabled. This can help prevent pin conflicts that users aren't aware of with unused functions
   if( (configPage2.flexEnabled > 0) && (!pinIsOutput(pinFlex)) )
@@ -2782,6 +2999,10 @@ void setPinMapping(byte boardID)
   {
     pinMode(pinOilPressure, INPUT);
   }
+  if( (configPage13.onboard_log_trigger_Epin > 0) && (!pinIsOutput(pinSDEnable)) )
+  {
+    pinMode(pinSDEnable, INPUT);
+  }
   if(configPage10.wmiEnabled > 0)
   {
     pinMode(pinWMIEnabled, OUTPUT);
@@ -2795,6 +3016,32 @@ void setPinMapping(byte boardID)
       if (configPage10.wmiEmptyPolarity == 0) { pinMode(pinWMIEmpty, INPUT_PULLUP); } //Normal setting
       else { pinMode(pinWMIEmpty, INPUT); } //inverted setting
     }
+  } 
+
+  if((pinAirConComp>0) && ((configPage15.airConEnable&1) == 1))
+  {
+    pinMode(pinAirConComp, OUTPUT);
+  }
+
+  if((pinAirConRequest > 0) && ((configPage15.airConEnable&1) == 1) && (!pinIsOutput(pinAirConRequest)))
+  {
+    if((configPage15.airConReqPol&1) == 1)
+    {
+      // Inverted
+      // +5V is ON, Use external pull-down resistor for OFF
+      pinMode(pinAirConRequest, INPUT);
+    }
+    else
+    {
+      //Normal
+      // Pin pulled to Ground is ON. Floating (internally pulled up to +5V) is OFF.
+      pinMode(pinAirConRequest, INPUT_PULLUP);
+    }
+  }
+
+  if((pinAirConFan > 0) && ((configPage15.airConEnable&1) == 1) && ((configPage15.airConFanEnabled&1) == 1))
+  {
+    pinMode(pinAirConFan, OUTPUT);
   }  
 
   //These must come after the above pinMode statements
@@ -2802,6 +3049,9 @@ void setPinMapping(byte boardID)
   triggerPri_pin_mask = digitalPinToBitMask(pinTrigger);
   triggerSec_pin_port = portInputRegister(digitalPinToPort(pinTrigger2));
   triggerSec_pin_mask = digitalPinToBitMask(pinTrigger2);
+  triggerThird_pin_port = portInputRegister(digitalPinToPort(pinTrigger3));
+  triggerThird_pin_mask = digitalPinToBitMask(pinTrigger3);
+
   flex_pin_port = portInputRegister(digitalPinToPort(pinFlex));
   flex_pin_mask = digitalPinToBitMask(pinFlex);
 
@@ -2812,7 +3062,7 @@ void setPinMapping(byte boardID)
  * 
  * @todo Explain why triggerSetup_*() alone cannot do all the setup, but there's ~10+ lines worth of extra init for each of decoders.
  */
-void initialiseTriggers()
+void initialiseTriggers(void)
 {
   byte triggerInterrupt = 0; // By default, use the first interrupt
   byte triggerInterrupt2 = 1;
@@ -2887,7 +3137,12 @@ void initialiseTriggers()
   pinMode(pinTrigger, INPUT);
   pinMode(pinTrigger2, INPUT);
   pinMode(pinTrigger3, INPUT);
-  //digitalWrite(pinTrigger, HIGH);
+
+  #if defined(CORE_TEENSY41)
+    //Teensy 4 requires a HYSTERESIS flag to be set on the trigger pins to prevent false interrupts
+    setTriggerHysteresis();
+  #endif
+
   detachInterrupt(triggerInterrupt);
   detachInterrupt(triggerInterrupt2);
   detachInterrupt(triggerInterrupt3);
@@ -2905,7 +3160,7 @@ void initialiseTriggers()
       triggerHandler = triggerPri_missingTooth;
       triggerSecondaryHandler = triggerSec_missingTooth;
       triggerTertiaryHandler = triggerThird_missingTooth;
-      decoderHasSecondary = true;
+      
       getRPM = getRPM_missingTooth;
       getCrankAngle = getCrankAngle_missingTooth;
       triggerSetEndTeeth = triggerSetEndTeeth_missingTooth;
@@ -2918,15 +3173,10 @@ void initialiseTriggers()
       else { tertiaryTriggerEdge = FALLING; }
 
       attachInterrupt(triggerInterrupt, triggerHandler, primaryTriggerEdge);
-      attachInterrupt(triggerInterrupt2, triggerSecondaryHandler, secondaryTriggerEdge);
+
+      if(BIT_CHECK(decoderState, BIT_DECODER_HAS_SECONDARY)) { attachInterrupt(triggerInterrupt2, triggerSecondaryHandler, secondaryTriggerEdge); }
       if(configPage10.vvt2Enabled > 0) { attachInterrupt(triggerInterrupt3, triggerTertiaryHandler, tertiaryTriggerEdge); } // we only need this for vvt2, so not really needed if it's not used
 
-      /*
-      if(configPage4.TrigEdge == 0) { attachInterrupt(triggerInterrupt, triggerHandler, RISING); }
-      else { attachInterrupt(triggerInterrupt, triggerHandler, FALLING); }
-      if(configPage4.TrigEdgeSec == 0) { attachInterrupt(triggerInterrupt2, triggerSec_missingTooth, RISING); }
-      else { attachInterrupt(triggerInterrupt2, triggerSec_missingTooth, FALLING); }
-      */
       break;
 
     case DECODER_BASIC_DISTRIBUTOR:
@@ -2947,7 +3197,6 @@ void initialiseTriggers()
       triggerSetup_DualWheel();
       triggerHandler = triggerPri_DualWheel;
       triggerSecondaryHandler = triggerSec_DualWheel;
-      decoderHasSecondary = true;
       getRPM = getRPM_DualWheel;
       getCrankAngle = getCrankAngle_DualWheel;
       triggerSetEndTeeth = triggerSetEndTeeth_DualWheel;
@@ -2981,7 +3230,6 @@ void initialiseTriggers()
       triggerSetup_4G63();
       triggerHandler = triggerPri_4G63;
       triggerSecondaryHandler = triggerSec_4G63;
-      decoderHasSecondary = true;
       getRPM = getRPM_4G63;
       getCrankAngle = getCrankAngle_4G63;
       triggerSetEndTeeth = triggerSetEndTeeth_4G63;
@@ -2997,7 +3245,6 @@ void initialiseTriggers()
       triggerSetup_24X();
       triggerHandler = triggerPri_24X;
       triggerSecondaryHandler = triggerSec_24X;
-      decoderHasSecondary = true;
       getRPM = getRPM_24X;
       getCrankAngle = getCrankAngle_24X;
       triggerSetEndTeeth = triggerSetEndTeeth_24X;
@@ -3014,7 +3261,6 @@ void initialiseTriggers()
       triggerSetup_Jeep2000();
       triggerHandler = triggerPri_Jeep2000;
       triggerSecondaryHandler = triggerSec_Jeep2000;
-      decoderHasSecondary = true;
       getRPM = getRPM_Jeep2000;
       getCrankAngle = getCrankAngle_Jeep2000;
       triggerSetEndTeeth = triggerSetEndTeeth_Jeep2000;
@@ -3031,7 +3277,6 @@ void initialiseTriggers()
       triggerSetup_Audi135();
       triggerHandler = triggerPri_Audi135;
       triggerSecondaryHandler = triggerSec_Audi135;
-      decoderHasSecondary = true;
       getRPM = getRPM_Audi135;
       getCrankAngle = getCrankAngle_Audi135;
       triggerSetEndTeeth = triggerSetEndTeeth_Audi135;
@@ -3048,7 +3293,6 @@ void initialiseTriggers()
       triggerSetup_HondaD17();
       triggerHandler = triggerPri_HondaD17;
       triggerSecondaryHandler = triggerSec_HondaD17;
-      decoderHasSecondary = true;
       getRPM = getRPM_HondaD17;
       getCrankAngle = getCrankAngle_HondaD17;
       triggerSetEndTeeth = triggerSetEndTeeth_HondaD17;
@@ -3065,7 +3309,6 @@ void initialiseTriggers()
       triggerSetup_Miata9905();
       triggerHandler = triggerPri_Miata9905;
       triggerSecondaryHandler = triggerSec_Miata9905;
-      decoderHasSecondary = true;
       getRPM = getRPM_Miata9905;
       getCrankAngle = getCrankAngle_Miata9905;
       triggerSetEndTeeth = triggerSetEndTeeth_Miata9905;
@@ -3084,7 +3327,6 @@ void initialiseTriggers()
       triggerSetup_MazdaAU();
       triggerHandler = triggerPri_MazdaAU;
       triggerSecondaryHandler = triggerSec_MazdaAU;
-      decoderHasSecondary = true;
       getRPM = getRPM_MazdaAU;
       getCrankAngle = getCrankAngle_MazdaAU;
       triggerSetEndTeeth = triggerSetEndTeeth_MazdaAU;
@@ -3101,7 +3343,6 @@ void initialiseTriggers()
       triggerSetup_non360();
       triggerHandler = triggerPri_DualWheel; //Is identical to the dual wheel decoder, so that is used. Same goes for the secondary below
       triggerSecondaryHandler = triggerSec_DualWheel; //Note the use of the Dual Wheel trigger function here. No point in having the same code in twice.
-      decoderHasSecondary = true;
       getRPM = getRPM_non360;
       getCrankAngle = getCrankAngle_non360;
       triggerSetEndTeeth = triggerSetEndTeeth_non360;
@@ -3118,7 +3359,6 @@ void initialiseTriggers()
       triggerSetup_Nissan360();
       triggerHandler = triggerPri_Nissan360;
       triggerSecondaryHandler = triggerSec_Nissan360;
-      decoderHasSecondary = true;
       getRPM = getRPM_Nissan360;
       getCrankAngle = getCrankAngle_Nissan360;
       triggerSetEndTeeth = triggerSetEndTeeth_Nissan360;
@@ -3135,7 +3375,6 @@ void initialiseTriggers()
       triggerSetup_Subaru67();
       triggerHandler = triggerPri_Subaru67;
       triggerSecondaryHandler = triggerSec_Subaru67;
-      decoderHasSecondary = true;
       getRPM = getRPM_Subaru67;
       getCrankAngle = getCrankAngle_Subaru67;
       triggerSetEndTeeth = triggerSetEndTeeth_Subaru67;
@@ -3179,7 +3418,6 @@ void initialiseTriggers()
       triggerSetup_ThirtySixMinus222();
       triggerHandler = triggerPri_ThirtySixMinus222;
       triggerSecondaryHandler = triggerSec_ThirtySixMinus222;
-      decoderHasSecondary = true;
       getRPM = getRPM_ThirtySixMinus222;
       getCrankAngle = getCrankAngle_missingTooth; //This uses the same function as the missing tooth decoder, so no need to duplicate code
       triggerSetEndTeeth = triggerSetEndTeeth_ThirtySixMinus222;
@@ -3195,6 +3433,20 @@ void initialiseTriggers()
 
     case DECODER_36_2_1:
       //36-2-1
+      triggerSetup_ThirtySixMinus21();
+      triggerHandler = triggerPri_ThirtySixMinus21;
+      triggerSecondaryHandler = triggerSec_missingTooth;
+      getRPM = getRPM_ThirtySixMinus21;
+      getCrankAngle = getCrankAngle_missingTooth; //This uses the same function as the missing tooth decoder, so no need to duplicate code
+      triggerSetEndTeeth = triggerSetEndTeeth_ThirtySixMinus21;
+
+      if(configPage4.TrigEdge == 0) { primaryTriggerEdge = RISING; } // Attach the crank trigger wheel interrupt (Hall sensor drags to ground when triggering)
+      else { primaryTriggerEdge = FALLING; }
+      if(configPage4.TrigEdgeSec == 0) { secondaryTriggerEdge = RISING; }
+      else { secondaryTriggerEdge = FALLING; }
+
+      attachInterrupt(triggerInterrupt, triggerHandler, primaryTriggerEdge);
+      attachInterrupt(triggerInterrupt2, triggerSecondaryHandler, secondaryTriggerEdge);
       break;
 
     case DECODER_420A:
@@ -3202,7 +3454,6 @@ void initialiseTriggers()
       triggerSetup_420a();
       triggerHandler = triggerPri_420a;
       triggerSecondaryHandler = triggerSec_420a;
-      decoderHasSecondary = true;
       getRPM = getRPM_420a;
       getCrankAngle = getCrankAngle_420a;
       triggerSetEndTeeth = triggerSetEndTeeth_420a;
@@ -3220,7 +3471,6 @@ void initialiseTriggers()
       triggerSetup_DualWheel();
       triggerHandler = triggerPri_Webber;
       triggerSecondaryHandler = triggerSec_Webber;
-      decoderHasSecondary = true;
       getRPM = getRPM_DualWheel;
       getCrankAngle = getCrankAngle_DualWheel;
       triggerSetEndTeeth = triggerSetEndTeeth_DualWheel;
@@ -3239,7 +3489,6 @@ void initialiseTriggers()
       triggerSetup_FordST170();
       triggerHandler = triggerPri_missingTooth;
       triggerSecondaryHandler = triggerSec_FordST170;
-      decoderHasSecondary = true;
       getRPM = getRPM_FordST170;
       getCrankAngle = getCrankAngle_FordST170;
       triggerSetEndTeeth = triggerSetEndTeeth_FordST170;
@@ -3253,12 +3502,11 @@ void initialiseTriggers()
       attachInterrupt(triggerInterrupt2, triggerSecondaryHandler, secondaryTriggerEdge);
 
       break;
-
+	  
     case DECODER_DRZ400:
       triggerSetup_DRZ400();
       triggerHandler = triggerPri_DualWheel;
       triggerSecondaryHandler = triggerSec_DRZ400;
-      decoderHasSecondary = true;
       getRPM = getRPM_DualWheel;
       getCrankAngle = getCrankAngle_DualWheel;
       triggerSetEndTeeth = triggerSetEndTeeth_DualWheel;
@@ -3276,7 +3524,6 @@ void initialiseTriggers()
       //Chrysler NGC - 4, 6 and 8 cylinder
       triggerSetup_NGC();
       triggerHandler = triggerPri_NGC;
-      decoderHasSecondary = true;
       getRPM = getRPM_NGC;
       getCrankAngle = getCrankAngle_missingTooth;
       triggerSetEndTeeth = triggerSetEndTeeth_NGC;
@@ -3308,6 +3555,42 @@ void initialiseTriggers()
       attachInterrupt(triggerInterrupt, triggerHandler, CHANGE); //Hardcoded change, the primaryTriggerEdge will be used in the decoder to select if it`s an inverted or non-inverted signal.
       break;
 
+    case DECODER_RENIX:
+      //Renault 44 tooth decoder
+      triggerSetup_Renix();
+      triggerHandler = triggerPri_Renix;
+      getRPM = getRPM_missingTooth;
+      getCrankAngle = getCrankAngle_missingTooth;
+      triggerSetEndTeeth = triggerSetEndTeeth_Renix;
+
+      if(configPage4.TrigEdge == 0) { primaryTriggerEdge = RISING; } // Attach the crank trigger wheel interrupt 
+      else { primaryTriggerEdge = FALLING; }
+      if(configPage4.TrigEdgeSec == 0) { secondaryTriggerEdge = RISING; }
+      else { secondaryTriggerEdge = FALLING; }
+
+      attachInterrupt(triggerInterrupt, triggerHandler, primaryTriggerEdge);
+      break;
+
+    case DECODER_ROVERMEMS:
+      //Rover MEMs - covers multiple flywheel trigger combinations.
+      triggerSetup_RoverMEMS();
+      triggerHandler = triggerPri_RoverMEMS;
+      getRPM = getRPM_RoverMEMS;
+      triggerSetEndTeeth = triggerSetEndTeeth_RoverMEMS;
+            
+      triggerSecondaryHandler = triggerSec_RoverMEMS; 
+      getCrankAngle = getCrankAngle_missingTooth;   
+
+      if(configPage4.TrigEdge == 0) { primaryTriggerEdge = RISING; } // Attach the crank trigger wheel interrupt (Hall sensor drags to ground when triggering)
+      else { primaryTriggerEdge = FALLING; }
+      if(configPage4.TrigEdgeSec == 0) { secondaryTriggerEdge = RISING; }
+      else { secondaryTriggerEdge = FALLING; }
+      
+      attachInterrupt(triggerInterrupt, triggerHandler, primaryTriggerEdge);
+      attachInterrupt(triggerInterrupt2, triggerSecondaryHandler, secondaryTriggerEdge);
+      break;   
+
+
     default:
       triggerHandler = triggerPri_missingTooth;
       getRPM = getRPM_missingTooth;
@@ -3325,12 +3608,13 @@ void initialiseTriggers()
 void changeHalfToFullSync(void)
 {
   //Need to do another check for injLayout as this function can be called from ignition
-  if( (configPage2.injLayout == INJ_SEQUENTIAL) && (CRANK_ANGLE_MAX_INJ != 720) )
+  noInterrupts();
+  if( (configPage2.injLayout == INJ_SEQUENTIAL) && (CRANK_ANGLE_MAX_INJ != 720) && fuelSchedule1.Status!=RUNNING && fuelSchedule2.Status!=RUNNING && fuelSchedule3.Status!=RUNNING && fuelSchedule4.Status!=RUNNING &&
+    fuelSchedule5.Status!=RUNNING && fuelSchedule6.Status!=RUNNING && fuelSchedule7.Status!=RUNNING && fuelSchedule8.Status!=RUNNING)
   {
     CRANK_ANGLE_MAX_INJ = 720;
-    maxIgnOutputs = configPage2.nCylinders;
     req_fuel_uS *= 2;
-    
+        
     inj1StartFunction = openInjector1;
     inj1EndFunction = closeInjector1;
     inj2StartFunction = openInjector2;
@@ -3351,21 +3635,15 @@ void changeHalfToFullSync(void)
     switch (configPage2.nCylinders)
     {
       case 4:
-        channel3InjEnabled = true;
-        channel4InjEnabled = true;
+        maxInjOutputs = 4;
         break;
             
       case 6:
-        channel4InjEnabled = true;
-        channel5InjEnabled = true;
-        channel6InjEnabled = true;
+        maxInjOutputs = 6;
         break;
 
       case 8:
-        channel5InjEnabled = true;
-        channel6InjEnabled = true;
-        channel7InjEnabled = true;
-        channel8InjEnabled = true;
+        maxInjOutputs = 8;
         break;
 
       default:
@@ -3373,6 +3651,7 @@ void changeHalfToFullSync(void)
 
     }
   }
+  interrupts();
 
   //Need to do another check for sparkMode as this function can be called from injection
   if( (configPage4.sparkMode == IGN_MODE_SEQUENTIAL) && (CRANK_ANGLE_MAX_IGN != 720) )
@@ -3424,7 +3703,6 @@ void changeFullToHalfSync(void)
   if(configPage2.injLayout == INJ_SEQUENTIAL)
   {
     CRANK_ANGLE_MAX_INJ = 360;
-    maxIgnOutputs = configPage2.nCylinders / 2;
     req_fuel_uS /= 2;
     switch (configPage2.nCylinders)
     {
@@ -3443,8 +3721,7 @@ void changeFullToHalfSync(void)
           inj2StartFunction = openInjector2and3;
           inj2EndFunction = closeInjector2and3;
         }
-        channel3InjEnabled = false;
-        channel4InjEnabled = false;
+        maxInjOutputs = 2;
         break;
             
       case 6:
@@ -3454,9 +3731,7 @@ void changeFullToHalfSync(void)
         inj2EndFunction = closeInjector2and5;
         inj3StartFunction = openInjector3and6;
         inj3EndFunction = closeInjector3and6;
-        channel4InjEnabled = false;
-        channel5InjEnabled = false;
-        channel6InjEnabled = false;
+        maxInjOutputs = 3;
         break;
 
       case 8:
@@ -3468,10 +3743,7 @@ void changeFullToHalfSync(void)
         inj3EndFunction = closeInjector3and7;
         inj4StartFunction = openInjector4and8;
         inj4EndFunction = closeInjector4and8;
-        channel5InjEnabled = false;
-        channel6InjEnabled = false;
-        channel7InjEnabled = false;
-        channel8InjEnabled = false;
+        maxInjOutputs = 4;
         break;
     }
   }

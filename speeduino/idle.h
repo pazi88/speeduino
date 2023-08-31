@@ -21,6 +21,7 @@
 
 #define STEPPER_FORWARD 0
 #define STEPPER_BACKWARD 1
+#define STEPPER_POWER_WHEN_ACTIVE 0
 #define IDLE_TABLE_SIZE 10
 
 enum StepperStatus {SOFF, STEPPING, COOLING}; //The 2 statuses that a stepper can have. STEPPING means that a high pulse is currently being sent and will need to be turned off at some point.
@@ -30,7 +31,7 @@ struct StepperIdle
   int curIdleStep; //Tracks the current location of the stepper
   int targetIdleStep; //What the targeted step is
   volatile StepperStatus stepperStatus;
-  volatile unsigned long stepStartTime; //The time the curren
+  volatile unsigned long stepStartTime;
   byte lessAirDirection;
   byte moreAirDirection;
 };
@@ -69,9 +70,10 @@ uint8_t idleTaper;
 byte idleUpOutputHIGH = HIGH; // Used to invert the idle Up Output 
 byte idleUpOutputLOW = LOW;   // Used to invert the idle Up Output 
 
-void initialiseIdle();
-void initialiseIdleUpOutput();
-void disableIdle();
-void idleInterrupt();
+void initialiseIdle(bool forcehoming);
+void idleControl(void);
+void initialiseIdleUpOutput(void);
+void disableIdle(void);
+void idleInterrupt(void);
 
 #endif
