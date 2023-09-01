@@ -1977,7 +1977,7 @@ void setPinMapping(byte boardID)
       pinStepperEnable = 30; //Enable pin for DRV8825 driver
       pinBoost = 12; //Boost control
       pinSpareLOut1 = 26; //low current output spare1
-      pinSpareLOut2 = 27; //low current output spare2
+      //pinSpareLOut2 = 27; //low current output spare2
       pinSpareLOut3 = 28; //low current output spare3
       pinSpareLOut4 = 29; //low current output spare4
       pinFan = 24; //Pin for the fan output
