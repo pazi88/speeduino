@@ -1977,7 +1977,7 @@ void setPinMapping(byte boardID)
       pinStepperEnable = 30; //Enable pin for DRV8825 driver
       pinBoost = 12; //Boost control
       pinSpareLOut1 = 26; //low current output spare1
-      pinSpareLOut2 = 27; //low current output spare2
+      //pinSpareLOut2 = 27; //low current output spare2
       pinSpareLOut3 = 28; //low current output spare3
       pinSpareLOut4 = 29; //low current output spare4
       pinFan = 24; //Pin for the fan output
@@ -2037,45 +2037,39 @@ void setPinMapping(byte boardID)
     #if defined(CORE_TEENSY35)
     case 50:
       //Pin mappings as per the teensy rev A shield
-pinInjector1 = 32; //Output pin injector 1 is on
-      pinInjector2 = 31; //Output pin injector 2 is on
-      pinInjector3 = 30; //Output pin injector 3 is on
-      pinInjector4 = 29; //Output pin injector 4 is on
-      pinInjector5 = 46; //Output pin injector 5 is on
-      pinInjector6 = 45; //Output pin injector 6 is on
-      pinInjector7 = 44; //Output pin injector 7 is on
-      pinInjector8 = 43; //Output pin injector 8 is on
-      pinCoil1 = 27; //Pin for coil 1
-      pinCoil2 = 28; //Pin for coil 2
-      pinCoil3 = 25; //Pin for coil 3
-      pinCoil4 = 26; //Pin for coil 4
-      pinCoil5 = 41; //Pin for coil 5
-      pinCoil6 = 40; //Pin for coil 6
-      pinCoil7 = 24; //Pin for coil 7
-      pinCoil8 = 42; //Pin for coil 8
-      pinTrigger = 47; //The CAS pin
-      pinTrigger2 = 48; //The Cam Sensor pin
-      pinTrigger3 = 17; //Not really connected. Just to prevent pin conflicts.
-      pinTPS = A7; //TPS input pin
-      pinMAP = A24; //MAP sensor pin
-      pinIAT = A11; //IAT sensor pin
-      pinCLT = A10; //CLT sensor pin
-      pinO2 = A8; //O2 sensor pin
+      pinInjector1 = 2; //Output pin injector 1 is on
+      pinInjector2 = 10; //Output pin injector 2 is on
+      pinInjector3 = 6; //Output pin injector 3 is on
+      pinInjector4 = 9; //Output pin injector 4 is on
+      //Placeholder only - NOT USED:
+      //pinInjector5 = 13;
+      pinCoil1 = 29; //Pin for coil 1
+      pinCoil2 = 30; //Pin for coil 2
+      pinCoil3 = 31; //Pin for coil 3 - ONLY WITH DB2
+      pinCoil4 = 32; //Pin for coil 4 - ONLY WITH DB2
+      //Placeholder only - NOT USED:
+      //pinCoil5 = 46; 
+      pinTrigger = 23; //The CAS pin
+      pinTrigger2 = 36; //The Cam Sensor pin
+      pinTPS = 16; //TPS input pin
+      pinMAP = 17; //MAP sensor pin
+      pinIAT = 14; //IAT sensor pin
+      pinCLT = 15; //CLT sensor pin
+      pinO2 = A22; //O2 sensor pin
       pinO2_2 = A21; //O2 sensor pin (second sensor)
-      pinBat = A23; //Battery reference voltage pin
-      pinBaro = A2; //Baro sensor pin
-	  pinVVT_1 = 9; //Default VVT output
-	  pinVVT_2 = 12; //Not really connected. Just to prevent pin conflicts.
-      pinTachOut = 2; //Tacho output pin
+      pinBat = 18; //Battery reference voltage pin
+      pinTachOut = 20; //Tacho output pin
       pinIdle1 = 5; //Single wire idle control
-      pinIdle2 = 10; //Single wire idle control
-      pinBoost = 6; //Boost control
-      pinFuelPump = 8; //Fuel pump output
-      pinStepperDir = 36; //Direction pin for DRV8825 driver
+      pinBoost = 11; //Boost control
+      pinFuelPump = 38; //Fuel pump output
+      pinStepperDir = 34; //Direction pin for DRV8825 driver
       pinStepperStep = 35; //Step pin for DRV8825 driver
-      pinStepperEnable = 11; //Not really connected. Just to prevent pin conflicts.
-      pinLaunch = 37;
-      pinFan = 7; //Pin for the fan output
+      pinStepperEnable = 33; //Enable pin for DRV8825 driver
+      pinLaunch = 26; //Can be overwritten below
+      pinFan = 37; //Pin for the fan output - ONLY WITH DB
+      pinSpareHOut1 = 8; // high current output spare1
+      pinSpareHOut2 = 7; // high current output spare2
+      pinSpareLOut1 = 21; //low current output spare1
       break;
 
     case 51:
