@@ -163,6 +163,9 @@
 #define MS_IN_MINUTE 60000
 #define US_IN_MINUTE 60000000
 
+#define SERIAL_PORT_PRIMARY   0
+#define SERIAL_PORT_SECONDARY 3
+
 //Define the load algorithm
 #define LOAD_SOURCE_MAP         0
 #define LOAD_SOURCE_TPS         1
@@ -555,27 +558,6 @@ extern byte triggerInterrupt;
 extern byte triggerInterrupt2;
 extern byte triggerInterrupt3;
 
-//These need to be here as they are used in both speeduino.ino and scheduler.ino
-extern byte channelInjEnabled;
-
-extern int ignition1EndAngle;
-extern int ignition2EndAngle;
-extern int ignition3EndAngle;
-extern int ignition4EndAngle;
-extern int ignition5EndAngle;
-extern int ignition6EndAngle;
-extern int ignition7EndAngle;
-extern int ignition8EndAngle;
-
-extern int ignition1StartAngle;
-extern int ignition2StartAngle;
-extern int ignition3StartAngle;
-extern int ignition4StartAngle;
-extern int ignition5StartAngle;
-extern int ignition6StartAngle;
-extern int ignition7StartAngle;
-extern int ignition8StartAngle;
-
 extern bool initialisationComplete; //Tracks whether the setup() function has run completely
 extern byte fpPrimeTime; //The time (in seconds, based on currentStatus.secl) that the fuel pump started priming
 extern uint8_t softLimitTime; //The time (in 0.1 seconds, based on seclx10) that the soft limiter started
@@ -611,7 +593,8 @@ extern volatile byte HWTest_INJ;      /**< Each bit in this variable represents 
 extern volatile byte HWTest_INJ_50pc; /**< Each bit in this variable represents one of the injector channels and it's 50% HW test status */
 extern volatile byte HWTest_IGN;      /**< Each bit in this variable represents one of the ignition channels and it's HW test status */
 extern volatile byte HWTest_IGN_50pc; /**< Each bit in this variable represents one of the ignition channels and it's 50% HW test status */
-extern byte maxIgnOutputs; /**< Used for rolling rev limiter to indicate how many total ignition channels should currently be firing */
+extern byte maxIgnOutputs;            /**< Number of ignition outputs being used by the current tune configuration */
+extern byte maxInjOutputs;            /**< Number of injection outputs being used by the current tune configuration */
 
 
 extern byte resetControl; ///< resetControl needs to be here (as global) because using the config page (4) directly can prevent burning the setting
@@ -1135,6 +1118,9 @@ struct config9 {
   byte enable_secondarySerial:1;            //enable secondary serial
   byte intcan_available:1;                     //enable internal can module
   byte enable_intcan:1;
+  byte secondarySerialProtocol:3;            //protocol for secondary serial. 0=Generic, 1=CAN, 2=msDroid, 3=Real Dash
+  byte unused9_0:2;
+
   byte caninput_sel[16];                    //bit status on/Can/analog_local/digtal_local if input is enabled
   uint16_t caninput_source_can_address[16];        //u16 [15] array holding can address of input
   uint8_t caninput_source_start_byte[16];     //u08 [15] array holds the start byte number(value of 0-7)
