@@ -36,7 +36,6 @@ byte inProgressLength;
 SerialStatus serialStatusFlag;
 SerialStatus serialSecondaryStatusFlag;
 
-
 static bool isMap(void) {
     // Detecting if the current page is a table/map
   return (currentPage == veMapPage) || (currentPage == ignMapPage) || (currentPage == afrMapPage) || (currentPage == fuelMap2Page) || (currentPage == ignMap2Page);
@@ -189,6 +188,10 @@ void legacySerialCommand(void)
       currentStatus.freeRAM = freeRam();
       Serial.write(lowByte(currentStatus.freeRAM));
       Serial.write(highByte(currentStatus.freeRAM));
+      break;
+
+    case 'M':
+      legacySerialHandler(currentCommand, Serial, serialStatusFlag);
       break;
 
     case 'N': // Displays a new line.  Like pushing enter in a text editor
@@ -392,48 +395,6 @@ void legacySerialCommand(void)
 
       break;
 
-    case 'M':
-      serialStatusFlag = SERIAL_COMMAND_INPROGRESS_LEGACY;
-
-      if(chunkPending == false)
-      {
-        //This means it's a new request
-        //7 bytes required:
-        //2 - Page identifier
-        //2 - offset
-        //2 - Length
-        //1 - 1st New value
-        if(Serial.available() >= 7)
-        {
-          byte offset1, offset2, length1, length2;
-
-          Serial.read(); // First byte of the page identifier can be ignored. It's always 0
-          currentPage = Serial.read();
-          //currentPage = 1;
-          offset1 = Serial.read();
-          offset2 = Serial.read();
-          valueOffset = word(offset2, offset1);
-          length1 = Serial.read();
-          length2 = Serial.read();
-          chunkSize = word(length2, length1);
-
-          //Regular page data
-          chunkPending = true;
-          chunkComplete = 0;
-        }
-      }
-      //This CANNOT be an else of the above if statement as chunkPending gets set to true above
-      if(chunkPending == true)
-      { 
-        while( (Serial.available() > 0) && (chunkComplete < chunkSize) )
-        {
-          setPageValue(currentPage, (valueOffset + chunkComplete), Serial.read());
-          chunkComplete++;
-        }
-        if(chunkComplete >= chunkSize) { serialStatusFlag = SERIAL_INACTIVE; chunkPending = false; }
-      }
-      break;
-
     case 'w':
       //No w commands are supported in legacy mode. This should never be called
       if(Serial.available() >= 7)
@@ -587,6 +548,48 @@ void legacySerialHandler(byte cmd, Stream &targetPort, SerialStatus &targetStatu
       }
       break;
 
+    case 'M':
+      targetStatusFlag = SERIAL_COMMAND_INPROGRESS_LEGACY;
+
+      if(chunkPending == false)
+      {
+        //This means it's a new request
+        //7 bytes required:
+        //2 - Page identifier
+        //2 - offset
+        //2 - Length
+        //1 - 1st New value
+        if(targetPort.available() >= 7)
+        {
+          byte offset1, offset2, length1, length2;
+
+          targetPort.read(); // First byte of the page identifier can be ignored. It's always 0
+          currentPage = targetPort.read();
+          //currentPage = 1;
+          offset1 = targetPort.read();
+          offset2 = targetPort.read();
+          valueOffset = word(offset2, offset1);
+          length1 = targetPort.read();
+          length2 = targetPort.read();
+          chunkSize = word(length2, length1);
+
+          //Regular page data
+          chunkPending = true;
+          chunkComplete = 0;
+        }
+      }
+      //This CANNOT be an else of the above if statement as chunkPending gets set to true above
+      if(chunkPending == true)
+      { 
+        while( (targetPort.available() > 0) && (chunkComplete < chunkSize) )
+        {
+          setPageValue(currentPage, (valueOffset + chunkComplete), targetPort.read());
+          chunkComplete++;
+        }
+        if(chunkComplete >= chunkSize) { targetStatusFlag = SERIAL_INACTIVE; chunkPending = false; }
+      }
+      break;
+
     case 'p':
       targetStatusFlag = SERIAL_COMMAND_INPROGRESS_LEGACY;
 
@@ -665,16 +668,18 @@ void legacySerialHandler(byte cmd, Stream &targetPort, SerialStatus &targetStatu
  * @param cmd - ??? - Will be used as some kind of ack on secondarySerial
  * @param targetPort - The HardwareSerial device that will be transmitted to
  * @param targetStatusFlag - The status flag that will be set to indicate the status of the transmission
+ * @param logFunction - The function that should be called to retrieve the log value
  * E.g. tuning sw command 'A' (Send all values) will send data from field number 0, LOG_ENTRY_SIZE fields.
  * @return the current values of a fixed group of variables
  */
-void sendValues(uint16_t offset, uint16_t packetLength, byte cmd, Stream &targetPort, SerialStatus &targetStatusFlag)
+void sendValues(uint16_t offset, uint16_t packetLength, byte cmd, Stream &targetPort, SerialStatus &targetStatusFlag) { sendValues(offset, packetLength, cmd, targetPort, targetStatusFlag, &getTSLogEntry); } //Defaults to using the standard TS log function
+void sendValues(uint16_t offset, uint16_t packetLength, byte cmd, Stream &targetPort, SerialStatus &targetStatusFlag, uint8_t (*logFunction)(uint16_t))
 {  
   #if defined(secondarySerial_AVAILABLE)
   if (&targetPort == &secondarySerial)
   {
-    //CAN serial
-    if( (configPage9.secondarySerialProtocol == SECONDARY_SERIAL_PROTO_GENERIC) || (configPage9.secondarySerialProtocol == SECONDARY_SERIAL_PROTO_REALDASH))
+    //Using Secondary serial, check if selected protocol requires the echo back of the command
+    if( (configPage9.secondarySerialProtocol == SECONDARY_SERIAL_PROTO_GENERIC_FIXED) || (configPage9.secondarySerialProtocol == SECONDARY_SERIAL_PROTO_GENERIC_INI) || (configPage9.secondarySerialProtocol == SECONDARY_SERIAL_PROTO_REALDASH))
     {
         if (cmd == 0x30) 
         {
@@ -711,9 +716,10 @@ void sendValues(uint16_t offset, uint16_t packetLength, byte cmd, Stream &target
   {
     bool bufferFull = false;
 
-    targetPort.write(getTSLogEntry(offset+x));
+    //targetPort.write(getTSLogEntry(offset+x));
+    targetPort.write(logFunction(offset+x));
 
-    if( (&targetPort == &Serial) || (configPage9.secondarySerialProtocol != SECONDARY_SERIAL_PROTO_REALDASH) ) 
+    if( (&targetPort == &Serial) ) 
     { 
       //If the transmit buffer is full, wait for it to clear. This cannot be used with Read Dash as it will cause a timeout
       if(targetPort.availableForWrite() < 1) { bufferFull = true; }
