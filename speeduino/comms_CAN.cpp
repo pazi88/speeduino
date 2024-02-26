@@ -84,7 +84,7 @@ void receiveCANwbo()
     outMsg.flags.extended = 1;
     outMsg.len = 2;
     outMsg.buf[0] = currentStatus.battery10; // We don't do any conversion since factor is 0.1 and speeduino value is x10
-    outMsg.buf[1] = 0x1; // Enable heater
+    outMsg.buf[1] = BIT_CHECK(currentStatus.engine, BIT_ENGINE_RUN) ? 0x1 : 0x0; // Enable heater once engine is running (ie. above cranking rpm), this condition can be changed to CLT above certain temp and so on.
     Can0.write(outMsg);
     if ((inMsg.id == 0x190 || inMsg.id == 0x192))
     {
@@ -566,8 +566,8 @@ void obd_response(uint8_t PIDmode, uint8_t requestedPIDlow, uint8_t requestedPID
           outMsg.buf[1] =  0x62;                                               // Same as query, except that 40h is added to the mode value. So:62h = custom mode
           outMsg.buf[2] =  requestedPIDlow;                                 // PID code
           outMsg.buf[3] =  0x77;                                               // PID code
-          outMsg.buf[4] =  lowByte(currentStatus.canin[requestedPIDlow]);   // A
-          outMsg.buf[5] =  highByte(currentStatus.canin[requestedPIDlow]);  // B
+          outMsg.buf[4] =  lowByte(currentStatus.canin[requestedPIDlow-1]);   // A
+          outMsg.buf[5] =  highByte(currentStatus.canin[requestedPIDlow-1]);  // B
           outMsg.buf[6] =  0x00;                                               // C
           outMsg.buf[7] =  0x00;                                               // D
       }
