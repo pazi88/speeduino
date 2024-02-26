@@ -13,6 +13,9 @@ void testPW(void)
   RUN_TEST(test_PW_AFR_Multiply);
   RUN_TEST(test_PW_Large_Correction);
   RUN_TEST(test_PW_Very_Large_Correction);
+  RUN_TEST(test_PW_4Cyl_PW0);
+  RUN_TEST(test_PW_Limit_Long_Revolution);
+  RUN_TEST(test_PW_Limit_90pct);
 }
 
 int16_t REQ_FUEL;
@@ -125,4 +128,42 @@ void test_PW_Very_Large_Correction()
 
   uint16_t result = PW(REQ_FUEL, VE, MAP, corrections, injOpen);
   TEST_ASSERT_UINT16_WITHIN(PW_ALLOWED_ERROR+30, 21670, result); //Additional allowed error here 
+}
+
+//Test that unused pulse width values are set to 0
+//This test is for a 4 cylinder using paired injection where only INJ 1 and 2 should have PW > 0
+void test_PW_4Cyl_PW0(void)
+{
+  test_PW_setCommon();
+
+  configPage2.nCylinders = 4;
+  configPage2.injLayout = INJ_PAIRED;
+  configPage10.stagingEnabled = false; //Staging must be off or channels 3 and 4 will be used
+
+  loop();
+  TEST_ASSERT_EQUAL(0, currentStatus.PW3);
+  TEST_ASSERT_EQUAL(0, currentStatus.PW4);
+}
+
+//Tests the PW Limit calculation for a normal scenario
+void test_PW_Limit_90pct(void)
+{
+  revolutionTime = 10000UL; //6000 rpm
+  configPage2.dutyLim = 90;
+
+  //Duty limit of 90% for 10,000uS should give 9,000
+  TEST_ASSERT_EQUAL(9000, calculatePWLimit());
+}
+
+//Tests the PW Limit calculation when the revolution time is greater than the max UINT16 value
+//Occurs at approx. 915rpm
+void test_PW_Limit_Long_Revolution(void)
+{
+  revolutionTime = 100000UL; //600 rpm, below 915rpm cutover point
+  configPage2.dutyLim = 90;
+  configPage2.strokes = TWO_STROKE;
+  currentStatus.nSquirts = 1U;
+
+  //Duty limit of 90% for 100,000uS should give 90,000, but as this would overflow the PW value, this should default to UINT16 Max
+  TEST_ASSERT_EQUAL(UINT16_MAX, calculatePWLimit());
 }

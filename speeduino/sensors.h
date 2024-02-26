@@ -1,7 +1,7 @@
 #ifndef SENSORS_H
 #define SENSORS_H
 
-#include "Arduino.h"
+#include "globals.h"
 
 // The following are alpha values for the ADC filters.
 // Their values are from 0 to 240, with 0 being no filtering and 240 being maximum
@@ -28,15 +28,9 @@
 
 #define TPS_READ_FREQUENCY  30 //ONLY VALID VALUES ARE 15 or 30!!!
 
-/*
-#if defined(CORE_AVR)
-  #define ANALOG_ISR
-#endif
-*/
-
-volatile byte flexCounter = 0;
-volatile unsigned long flexStartTime;
-volatile unsigned long flexPulseWidth;
+extern volatile byte flexCounter;
+extern volatile unsigned long flexStartTime;
+extern volatile unsigned long flexPulseWidth;
 
 #if defined(CORE_AVR)
   #define READ_FLEX() ((*flex_pin_port & flex_pin_mask) ? true : false)
@@ -44,25 +38,16 @@ volatile unsigned long flexPulseWidth;
   #define READ_FLEX() digitalRead(pinFlex)
 #endif
 
-volatile byte knockCounter = 0;
-volatile uint16_t knockAngle;
+#define ADMUX_DEFAULT_CONFIG  0x40 //AVCC reference, ADC0 input, right adjusted, ADC enabled
 
-unsigned long MAPrunningValue; //Used for tracking either the total of all MAP readings in this cycle (Event average) or the lowest value detected in this cycle (event minimum)
-unsigned long EMAPrunningValue; //As above but for EMAP
-unsigned int MAPcount; //Number of samples taken in the current MAP cycle
-uint32_t MAPcurRev; //Tracks which revolution we're sampling on
-bool auxIsEnabled;
-uint16_t MAPlast; /**< The previous MAP reading */
-unsigned long MAP_time; //The time the MAP sample was taken
-unsigned long MAPlast_time; //The time the previous MAP sample was taken
-volatile unsigned long vssTimes[VSS_SAMPLES] = {0};
-volatile byte vssIndex;
+extern volatile byte knockCounter;
 
-
-//These variables are used for tracking the number of running sensors values that appear to be errors. Once a threshold is reached, the sensor reading will go to default value and assume the sensor is faulty
-byte mapErrorCount = 0;
-byte iatErrorCount = 0;
-byte cltErrorCount = 0;
+extern unsigned int MAPcount; //Number of samples taken in the current MAP cycle
+extern uint32_t MAPcurRev; //Tracks which revolution we're sampling on
+extern bool auxIsEnabled;
+extern uint16_t MAPlast; /**< The previous MAP reading */
+extern unsigned long MAP_time; //The time the MAP sample was taken
+extern unsigned long MAPlast_time; //The time the previous MAP sample was taken
 
 /**
  * @brief Simple low pass IIR filter macro for the analog inputs
@@ -71,9 +56,6 @@ byte cltErrorCount = 0;
  */
 #define ADC_FILTER(input, alpha, prior) (((long)input * (256 - alpha) + ((long)prior * alpha))) >> 8
 
-static inline void instanteneousMAPReading(void) __attribute__((always_inline));
-static inline void readMAP(void) __attribute__((always_inline));
-static inline void validateMAP(void);
 void initialiseADC(void);
 void readTPS(bool useFilter=true); //Allows the option to override the use of the filter
 void readO2_2(void);
@@ -91,70 +73,7 @@ void readIAT(void);
 void readO2(void);
 void readBat(void);
 void readBaro(void);
-
-#if defined(ANALOG_ISR)
-volatile int AnChannel[15];
-
-//Analog ISR interrupt routine
-/*
-ISR(ADC_vect)
-{
-  byte nChannel;
-  int result = ADCL | (ADCH << 8);
-
-  //ADCSRA = 0x6E; - ADC disabled by clearing bit 7(ADEN)
-  //BIT_CLEAR(ADCSRA, ADIE);
-
-  nChannel = ADMUX & 0x07;
-  #if defined(__AVR_ATmega1281__) || defined(__AVR_ATmega2561__)
-    if (nChannel==7) { ADMUX = 0x40; }
-  #elif defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
-    if(ADCSRB & 0x08) { nChannel += 8; }  //8 to 15
-    if(nChannel == 15)
-    {
-      ADMUX = 0x40; //channel 0
-      ADCSRB = 0x00; //clear MUX5 bit
-    }
-    else if (nChannel == 7) //channel 7
-    {
-      ADMUX = 0x40;
-      ADCSRB = 0x08; //Set MUX5 bit
-    }
-  #endif
-    else { ADMUX++; }
-  AnChannel[nChannel-1] = result;
-
-  //BIT_SET(ADCSRA, ADIE);
-  //ADCSRA = 0xEE; - ADC Interrupt Flag enabled
-}
-*/
-ISR(ADC_vect)
-{
-  byte nChannel = ADMUX & 0x07;
-  int result = ADCL | (ADCH << 8);
-
-  BIT_CLEAR(ADCSRA, ADEN); //Disable ADC for Changing Channel (see chapter 26.5 of datasheet)
-
-  #if defined(__AVR_ATmega1281__) || defined(__AVR_ATmega2561__)
-    if (nChannel==7) { ADMUX = 0x40; }
-  #elif defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
-    if( (ADCSRB & 0x08) > 0) { nChannel += 8; }  //8 to 15
-    if(nChannel == 15)
-    {
-      ADMUX = 0x40; //channel 0
-      ADCSRB = 0x00; //clear MUX5 bit
-    }
-    else if (nChannel == 7) //channel 7
-    {
-      ADMUX = 0x40;
-      ADCSRB = 0x08; //Set MUX5 bit
-    }
-  #endif
-    else { ADMUX++; }
-  AnChannel[nChannel] = result;
-
-  BIT_SET(ADCSRA, ADEN); //Enable ADC
-}
-#endif
+void readMAP(void);
+void instanteneousMAPReading(void);
 
 #endif // SENSORS_H
