@@ -36,9 +36,6 @@ volatile byte flexCounter = 0;
 volatile unsigned long flexStartTime;
 volatile unsigned long flexPulseWidth;
 
-volatile byte knockCounter = 0;
-volatile uint16_t knockAngle;
-
 //These variables are used for tracking the number of running sensors values that appear to be errors. Once a threshold is reached, the sensor reading will go to default value and assume the sensor is faulty
 byte mapErrorCount = 0;
 //byte iatErrorCount = 0; Not used
@@ -809,6 +806,28 @@ byte getOilPressure(void)
   return (byte)tempOilPressure;
 }
 
+uint8_t getAnalogKnock(void)
+{
+  uint16_t tempReading;
+  uint8_t pinKnock = A15; //Default value in case the user has not selected an analog pin in TunerStudio
+  if(configPage10.knock_pin >=47U)
+  {
+    pinKnock = pinTranslateAnalog(configPage10.knock_pin - 47U); //The knock_pin variable has both digital and analog pins listed. A0 is at position 47
+  }
+
+  //Perform ADC read
+  #if defined(ANALOG_ISR)
+    tempReading = AnChannel[pinKnock-A0];
+  #else
+    tempReading = analogRead(pinKnock);
+    tempReading = analogRead(pinKnock);
+  #endif
+
+  tempReading = fastMap1023toX(tempReading, 255);
+
+  return (uint8_t)tempReading;
+}
+
 /*
  * The interrupt function for reading the flex sensor frequency and pulse width
  * flexCounter value is incremented with every pulse and reset back to 0 once per second
@@ -833,15 +852,11 @@ void flexPulse(void)
  */
 void knockPulse(void)
 {
-  //Check if this the start of a knock. 
-  if(knockCounter == 0)
+  if( (currentStatus.MAP < (configPage10.knock_maxMAP*2)) && (currentStatus.RPMdiv100 < configPage10.knock_maxRPM) )
   {
-    //knockAngle = crankAngle + timeToAngleDegPerMicroSec( (micros() - lastCrankAngleCalc) ); 
-    knockStartTime = micros();
-    knockCounter = 1;
+    if(!BIT_CHECK(currentStatus.status5, BIT_STATUS5_KNOCK_ACTIVE)) { currentStatus.knockCount++; } //If knock is not currently active we count every pulse. If knock is already active then additional pulses will be counted in correctionKnockTiming()
+    BIT_SET(currentStatus.status5, BIT_STATUS5_KNOCK_PULSE);
   }
-  else { ++knockCounter; } //Knock has already started, so just increment the counter for this
-
 }
 
 /**

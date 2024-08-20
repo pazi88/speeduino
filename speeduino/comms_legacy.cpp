@@ -709,7 +709,7 @@ void sendValues(uint16_t offset, uint16_t packetLength, byte cmd, Stream &target
 
   //
   targetStatusFlag = SERIAL_TRANSMIT_INPROGRESS_LEGACY;
-  currentStatus.spark ^= (-currentStatus.hasSync ^ currentStatus.spark) & (1U << BIT_SPARK_SYNC); //Set the sync bit of the Spark variable to match the hasSync variable
+  currentStatus.status2 ^= (-currentStatus.hasSync ^ currentStatus.status2) & (1U << BIT_STATUS2_SYNC); //Set the sync bit of the Spark variable to match the hasSync variable
 
   for(byte x=0; x<packetLength; x++)
   {
@@ -842,7 +842,7 @@ void sendValuesLegacy(void)
   bytestosend -= Serial.write(temp >> 8); // MAPdot
   bytestosend -= Serial.write(temp); // MAPdot
 
-  temp = currentStatus.dwell * 10;
+  temp = currentStatus.dwell * 10U;
   bytestosend -= Serial.write(temp>>8); // dwell
   bytestosend -= Serial.write(temp); // dwell
 
@@ -1251,7 +1251,7 @@ void sendToothLog_legacy(byte startOffset) /* Blocking */
   if (BIT_CHECK(currentStatus.status1, BIT_STATUS1_TOOTHLOG1READY)) //Sanity check. Flagging system means this should always be true
   {
       serialStatusFlag = SERIAL_TRANSMIT_TOOTH_INPROGRESS_LEGACY; 
-      for (int x = startOffset; x < TOOTH_LOG_SIZE; x++)
+      for (uint8_t x = startOffset; x < TOOTH_LOG_SIZE; ++x)
       {
         Serial.write(toothHistory[x] >> 24);
         Serial.write(toothHistory[x] >> 16);
@@ -1265,7 +1265,7 @@ void sendToothLog_legacy(byte startOffset) /* Blocking */
   else 
   { 
     //TunerStudio has timed out, send a LOG of all 0s
-    for(int x = 0; x < (4*TOOTH_LOG_SIZE); x++)
+    for(uint16_t x = 0U; x < (4U*TOOTH_LOG_SIZE); ++x)
     {
       Serial.write(static_cast<byte>(0x00)); //GCC9 fix
     }
@@ -1279,7 +1279,7 @@ void sendCompositeLog_legacy(byte startOffset) /* Non-blocking */
   {
       serialStatusFlag = SERIAL_TRANSMIT_COMPOSITE_INPROGRESS_LEGACY;
 
-      for (int x = startOffset; x < TOOTH_LOG_SIZE; x++)
+      for (uint8_t x = startOffset; x < TOOTH_LOG_SIZE; ++x)
       {
         //Check whether the tx buffer still has space
         if(Serial.availableForWrite() < 4) 
@@ -1305,7 +1305,7 @@ void sendCompositeLog_legacy(byte startOffset) /* Non-blocking */
   else 
   { 
     //TunerStudio has timed out, send a LOG of all 0s
-    for(int x = 0; x < (5*TOOTH_LOG_SIZE); x++)
+    for(uint16_t x = 0U; x < (5U*TOOTH_LOG_SIZE); ++x)
     {
       Serial.write(static_cast<byte>(0x00)); //GCC9 fix
     }

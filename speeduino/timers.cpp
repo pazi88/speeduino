@@ -27,6 +27,7 @@ Timers are typically low resolution (Compared to Schedulers), with maximum frequ
 
 volatile uint16_t lastRPM_100ms; //Need to record this for rpmDOT calculation
 volatile byte loop5ms;
+volatile byte loop20ms;
 volatile byte loop33ms;
 volatile byte loop66ms;
 volatile byte loop100ms;
@@ -50,6 +51,7 @@ void initialiseTimers(void)
 {
   lastRPM_100ms = 0;
   loop5ms = 0;
+  loop20ms = 0;
   loop33ms = 0;
   loop66ms = 0;
   loop100ms = 0;
@@ -79,6 +81,7 @@ void oneMSInterval(void) //Most ARM chips can simply call a function
 
   //Increment Loop Counters
   loop5ms++;
+  loop20ms++;
   loop33ms++;
   loop66ms++;
   loop100ms++;
@@ -164,11 +167,18 @@ void oneMSInterval(void) //Most ARM chips can simply call a function
   }
 
   //200Hz loop
-  if (loop5ms == 5)
+  if(loop5ms == 5)
   {
     loop5ms = 0; //Reset counter
     BIT_SET(TIMER_mask, BIT_TIMER_200HZ);
-  }  
+  }
+
+  //50Hz loop
+  if(loop20ms == 20)
+  {
+    loop20ms = 0; //Reset counter
+    BIT_SET(TIMER_mask, BIT_TIMER_50HZ);
+  }
 
   //30Hz loop
   if (loop33ms == 33)
@@ -320,11 +330,10 @@ void oneMSInterval(void) //Most ARM chips can simply call a function
       currentStatus.ethanolPct = ADC_FILTER(tempEthPct, configPage4.FILTER_FLEX, currentStatus.ethanolPct);
 
       //Continental flex sensor fuel temperature can be read with following formula: (Temperature = (41.25 * pulse width(ms)) - 81.25). 1000μs = -40C and 5000μs = 125C
-      if(flexPulseWidth > 5000) { flexPulseWidth = 5000; }
-      else if(flexPulseWidth < 1000) { flexPulseWidth = 1000; }
-      currentStatus.fuelTemp = div100( (int16_t)(((4224 * (long)flexPulseWidth) >> 10) - 8125) );
+      flexPulseWidth = constrain(flexPulseWidth, 1000UL, 5000UL);
+      int32_t tempX100 = (int32_t)rshift<10>(4224UL * flexPulseWidth) - 8125L; //Split up for MISRA compliance
+      currentStatus.fuelTemp = div100((int16_t)tempX100);     
     }
-
   }
 
   //Turn off any of the pulsed testing outputs if they are active and have been running for long enough

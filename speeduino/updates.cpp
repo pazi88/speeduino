@@ -13,11 +13,12 @@
 #include "sensors.h"
 #include "updates.h"
 #include "pages.h"
+#include "comms_CAN.h"
 #include EEPROM_LIB_H //This is defined in the board .h files
 
 void doUpdates(void)
 {
-  #define CURRENT_DATA_VERSION    23
+  #define CURRENT_DATA_VERSION    24
   //Only the latest update for small flash devices must be retained
    #ifndef SMALL_FLASH_MODE
 
@@ -623,8 +624,7 @@ void doUpdates(void)
     configPage6.tachoMode = 0;
 
     //CAN broadcast introduced
-    configPage2.canBMWCluster = 0;
-    configPage2.canVAGCluster = 0;
+    configPage4.CANBroadcastProtocol = CAN_BROADCAST_PROTOCOL_OFF;
     
     configPage15.boostDCWhenDisabled = 0;
     configPage15.boostControlEnable = EN_BOOST_CONTROL_BARO;
@@ -665,7 +665,7 @@ void doUpdates(void)
 
     //AFR Protection added, add default values
     configPage9.afrProtectEnabled = 0; //Disable by default
-    configPage9.afrProtectMinMAP = 90; //Is divided by 2, vlue represents 180kPa
+    configPage9.afrProtectMinMAP = 90; //Is divided by 2, value represents 180kPa
     configPage9.afrProtectMinRPM = 40; //4000 RPM min
     configPage9.afrProtectMinTPS = 160; //80% TPS min
     configPage9.afrProtectDeviation = 14; //1.4 AFR deviation    
@@ -718,7 +718,7 @@ void doUpdates(void)
     configPage15.rollingProtCutPercent[2] = 80;
     configPage15.rollingProtCutPercent[3] = 95;
 
-    //DFCO Hyster was multipled by 2 to allow a range of 0-500. Existing values must be halved
+    //DFCO Hyster was multiplied by 2 to allow a range of 0-500. Existing values must be halved
     configPage4.dfcoHyster = configPage4.dfcoHyster / 2;
 
     writeAllConfig();
@@ -750,6 +750,23 @@ void doUpdates(void)
 
     writeAllConfig();
     storeEEPROMVersion(23);
+  }
+
+  if(readEEPROMVersion() == 23)
+  {
+    //202405
+    configPage10.knock_mode = KNOCK_MODE_OFF;
+
+    //Change the CAN Broadcast settings to be a selection
+    //Note that 1 preference will be lost if both BMW AND VAG protocols were enabled, but that is not a likely combination.
+    if(configPage2.unused1_126_1 == true) { configPage4.CANBroadcastProtocol = CAN_BROADCAST_PROTOCOL_BMW; } //unused1_126_1 was canBMWCluster
+    if(configPage2.unused1_126_2 == true) { configPage4.CANBroadcastProtocol = CAN_BROADCAST_PROTOCOL_VAG; } //unused1_126_2 was canVAGCluster
+
+    //VSS max limit on launch control
+    configPage10.lnchCtrlVss = 255;
+
+    writeAllConfig();
+    storeEEPROMVersion(24);
   }
   
   //Final check is always for 255 and 0 (Brand new arduino)
