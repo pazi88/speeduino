@@ -299,7 +299,6 @@ void initialiseAll(void)
     {
       //First time running on this board
       resetConfigPages();
-      configPage4.triggerTeeth = 4; //Avoiddiv by 0 when start decoders
       setPinMapping(3); //Force board to v0.4
     }
     else { setPinMapping(configPage2.pinMapping); }
@@ -1349,7 +1348,7 @@ void initialiseAll(void)
     readTPS(false); // Need to read tps to detect flood clear state
 
     /* tacho sweep function. */
-    //tachoStatus.tachoSweepEnabled = (configPage2.useTachoSweep > 0);
+    currentStatus.tachoSweepEnabled = (configPage2.useTachoSweep > 0);
     /* SweepMax is stored as a byte, RPM/100. divide by 60 to convert min to sec (net 5/3).  Multiply by ignition pulses per rev.
        tachoSweepIncr is also the number of tach pulses per second */
     tachoSweepIncr = configPage2.tachoSweepMaxRPM * maxIgnOutputs * 5 / 3;
@@ -1368,6 +1367,8 @@ void setPinMapping(byte boardID)
   //Force set defaults. Will be overwritten below if needed.
   injectorOutputControl = OUTPUT_CONTROL_DIRECT;
   ignitionOutputControl = OUTPUT_CONTROL_DIRECT;
+
+  if( configPage4.triggerTeeth == 0 ) { configPage4.triggerTeeth = 4; } //Avoid potential divide by 0 when starting decoders
 
   switch (boardID)
   {
@@ -1539,7 +1540,7 @@ void setPinMapping(byte boardID)
 
         pinTrigger = 20; //The CAS pin
         pinTrigger2 = 21; //The Cam Sensor pin
-        pinTrigger3 = 23;
+        pinTrigger3 = 24;
 
         pinStepperDir = 34;
         pinStepperStep = 35;
@@ -2473,7 +2474,7 @@ void setPinMapping(byte boardID)
         // = PB4;  //(DO NOT USE FOR SPEEDUINO) SPI1_MISO FLASH CHIP
         // = PB5;  //(DO NOT USE FOR SPEEDUINO) SPI1_MOSI FLASH CHIP
         // = PB6;  //NRF_CE
-        // = PB7;  //NRF_CS
+        pinCoil6 = PB7;  //NRF_CS
         // = PB8;  //NRF_IRQ
         pinCoil2 = PB9; //
         // = PB9;  //

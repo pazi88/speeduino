@@ -479,7 +479,7 @@ void triggerSetup_missingTooth(void)
   toothOneMinusOneTime = 0;
   MAX_STALL_TIME = ((MICROS_PER_DEG_1_RPM/50U) * triggerToothAngle * (configPage4.triggerMissingTeeth + 1U)); //Minimum 50rpm. (3333uS is the time per degree at 50rpm)
 
-  if( (configPage4.TrigSpeed == CRANK_SPEED) &&  ( (configPage4.sparkMode == IGN_MODE_SEQUENTIAL) || (configPage2.injLayout == INJ_SEQUENTIAL) ) ) { BIT_SET(decoderState, BIT_DECODER_HAS_SECONDARY); }
+  if( (configPage4.TrigSpeed == CRANK_SPEED) && ( (configPage4.sparkMode == IGN_MODE_SEQUENTIAL) || (configPage2.injLayout == INJ_SEQUENTIAL) || (configPage6.vvtEnabled > 0)) ) { BIT_SET(decoderState, BIT_DECODER_HAS_SECONDARY); }
   else { BIT_CLEAR(decoderState, BIT_DECODER_HAS_SECONDARY); }
 #ifdef USE_LIBDIVIDE
   divTriggerToothAngle = libdivide::libdivide_s16_gen(triggerToothAngle);
@@ -628,8 +628,8 @@ void triggerSec_missingTooth(void)
         {
           secondaryToothCount = 1;
           revolutionOne = 1; //Sequential revolution reset
-          triggerSecFilterTime = 0; //This is used to prevent a condition where serious intermitent signals (Eg someone furiously plugging the sensor wire in and out) can leave the filter in an unrecoverable state
-          triggerRecordVVT1Angle ();
+          triggerSecFilterTime = 0; //This is used to prevent a condition where serious intermittent signals (Eg someone furiously plugging the sensor wire in and out) can leave the filter in an unrecoverable state
+          triggerRecordVVT1Angle();
         }
         else
         {
@@ -638,12 +638,19 @@ void triggerSec_missingTooth(void)
         }
         break;
 
+      case SEC_TRIGGER_POLL:
+        //Poll is effectively the same as SEC_TRIGGER_SINGLE, however we do not reset revolutionOne
+        //We do still need to record the angle for VVT though
+        triggerSecFilterTime = curGap2 >> 1; //Next secondary filter is half the current gap
+        triggerRecordVVT1Angle();
+        break;
+
       case SEC_TRIGGER_SINGLE:
         //Standard single tooth cam trigger
         revolutionOne = 1; //Sequential revolution reset
         triggerSecFilterTime = curGap2 >> 1; //Next secondary filter is half the current gap
         secondaryToothCount++;
-        triggerRecordVVT1Angle ();
+        triggerRecordVVT1Angle();
         break;
 
       case SEC_TRIGGER_TOYOTA_3:
@@ -653,7 +660,7 @@ void triggerSec_missingTooth(void)
         if(secondaryToothCount == 2)
         { 
           revolutionOne = 1; // sequential revolution reset
-          triggerRecordVVT1Angle ();         
+          triggerRecordVVT1Angle();         
         }        
         //Next secondary filter is 25% the current gap, done here so we don't get a great big gap for the 1st tooth
         triggerSecFilterTime = curGap2 >> 2; 
@@ -785,7 +792,7 @@ static uint16_t __attribute__((noinline)) calcEndTeeth_missingTooth(int endAngle
 void triggerSetEndTeeth_missingTooth(void)
 {
   uint8_t toothAdder = 0;
-  if( (configPage4.sparkMode == IGN_MODE_SEQUENTIAL) && (configPage4.TrigSpeed == CRANK_SPEED) && (configPage2.strokes == FOUR_STROKE) ) { toothAdder = configPage4.triggerTeeth; }
+  if( ((configPage4.sparkMode == IGN_MODE_SEQUENTIAL) || (configPage4.sparkMode == IGN_MODE_SINGLE)) && (configPage4.TrigSpeed == CRANK_SPEED) && (configPage2.strokes == FOUR_STROKE) ) { toothAdder = configPage4.triggerTeeth; }
 
   ignition1EndTooth = calcEndTeeth_missingTooth(ignition1EndAngle, toothAdder);
   ignition2EndTooth = calcEndTeeth_missingTooth(ignition2EndAngle, toothAdder);
@@ -1011,7 +1018,11 @@ void triggerSetup_BasicDistributor(void)
 {
   triggerActualTeeth = configPage2.nCylinders;
   if(triggerActualTeeth == 0) { triggerActualTeeth = 1; }
-  triggerToothAngle = 720U / triggerActualTeeth; //The number of degrees that passes from tooth to tooth
+
+  //The number of degrees that passes from tooth to tooth. Depends on number of cylinders and whether 4 or 2 stroke
+  if(configPage2.strokes == FOUR_STROKE) { triggerToothAngle = 720U / triggerActualTeeth; }
+  else { triggerToothAngle = 360U / triggerActualTeeth; }
+
   triggerFilterTime = MICROS_PER_MIN / MAX_RPM / configPage2.nCylinders; // Minimum time required between teeth
   triggerFilterTime = triggerFilterTime / 2; //Safety margin
   triggerFilterTime = 0;
@@ -1085,11 +1096,14 @@ void triggerSec_BasicDistributor(void) { return; } //Not required
 uint16_t getRPM_BasicDistributor(void)
 {
   uint16_t tempRPM;
+  uint8_t distributorSpeed = CAM_SPEED; //Default to cam speed
+  if(configPage2.strokes == TWO_STROKE) { distributorSpeed = CRANK_SPEED; } //For 2 stroke distributors, the tooth rate is based on crank speed, not 'cam'
+
   if( currentStatus.RPM < currentStatus.crankRPM || currentStatus.RPM < 1500)
   { 
-    tempRPM = crankingGetRPM(triggerActualTeeth, CAM_SPEED);
+    tempRPM = crankingGetRPM(triggerActualTeeth, distributorSpeed);
   } 
-  else { tempRPM = stdGetRPM(CAM_SPEED); }
+  else { tempRPM = stdGetRPM(distributorSpeed); }
 
   MAX_STALL_TIME = revolutionTime << 1; //Set the stall time to be twice the current RPM. This is a safe figure as there should be no single revolution where this changes more than this
   if(triggerActualTeeth == 1) { MAX_STALL_TIME = revolutionTime << 1; } //Special case for 1 cylinder engines that only get 1 pulse every 720 degrees
