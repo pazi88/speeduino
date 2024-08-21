@@ -265,7 +265,7 @@ byte SPI_EEPROM_Class::read(uint16_t addressEEPROM){
     return FLASH_EEPROM_BaseClass::read(addressEEPROM);
 }
 
-int8_t SPI_EEPROM_Class::begin(SPIClass &_spi, uint8_t pinSPIFlash_CS=6){
+int8_t SPI_EEPROM_Class::begin(SPIClass &_spi, uint8_t pinSPIFlash_CS=PE1){
     pinMode(pinSPIFlash_CS, OUTPUT);
     bool flashavailable;
     flashavailable = winbondSPIFlash.begin(winbondFlashClass::partNumber::autoDetect, _spi, pinSPIFlash_CS);
