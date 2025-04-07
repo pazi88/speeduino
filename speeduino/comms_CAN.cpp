@@ -12,6 +12,7 @@ This is for handling the data broadcasted to various CAN dashes and instrument c
 #if defined(NATIVE_CAN_AVAILABLE)
 #include "comms_CAN.h"
 #include "utilities.h"
+#include "maths.h"
 
 CAN_message_t inMsg;
 CAN_message_t outMsg;
@@ -110,6 +111,8 @@ void sendCANBroadcast(uint8_t frequency)
         Can0.write(outMsg);
         DashMessage(CAN_HALTECH_TRIGGER);
         Can0.write(outMsg);
+        DashMessage(CAN_HALTECH_VSS);
+        Can0.write(outMsg);
       }
       else if(frequency == 10)
       {
@@ -127,8 +130,7 @@ void sendCANBroadcast(uint8_t frequency)
 
 void receiveCANwbo() 
 {
-  // Currently only RusEFI CAN Wideband supported: https://github.com/mck1117/wideband
-  if(configPage2.canWBO == CAN_WBO_RUSEFI)
+  if(configPage2.canWBO == CAN_WBO_RUSEFI) //RusEFI CAN Wideband supported: https://github.com/mck1117/wideband
   {
     outMsg.id = 0xEF50000;
     outMsg.flags.extended = 1;
@@ -162,6 +164,20 @@ void receiveCANwbo()
       }
     }
   }
+  else if(configPage2.canWBO == CAN_WBO_AEM) //AEM 30-0300 X-Series UEGO Gauge
+  {
+    if(inMsg.id == 0x180)  //AEM wideband default ID1 message id
+    {
+      uint32_t inLambda;
+      inLambda = (word(inMsg.buf[0], inMsg.buf[1])); //Combining 2 bytes of data into single variable factor is 0.0001 so lambda 1 comes in as 10K
+      if(BIT_CHECK(inMsg.buf[6], 7)) //Checking if lambda is valid
+      {
+        inLambda = (inLambda * configPage2.stoich) / 10000; //Multiplying lambda by stoich ratio to get AFR and dividing it by 10000 to get correct value
+        if (inLambda > UINT8_MAX) { currentStatus.O2 = UINT8_MAX; } //Check if we don't overflow the 8bit O2 variable
+        else { currentStatus.O2 = inLambda; }
+      }
+    }
+  }
 }
 
 // All supported definitions/protocols for CAN Dash broadcasts
@@ -172,8 +188,13 @@ void DashMessage(uint16_t DashMessageID)
   uint16_t temp_Baro;
   uint16_t temp_CLT;
   uint16_t temp_IAT;
+  uint16_t temp_VSS;
+  uint16_t temp_VVT1;
+  uint16_t temp_VVT2;
   uint16_t temp_fuelLoad;
   uint16_t temp_fuelTemp;
+  uint16_t temp_fuelPressure;
+  uint16_t temp_oilPressure;
   int16_t temp_Advance;
   uint16_t temp_DutyCycle;
   uint16_t temp_Lambda;
@@ -199,8 +220,8 @@ void DashMessage(uint16_t DashMessageID)
 
     case CAN_BMW_DME2:
       temp_TPS = map(currentStatus.TPS, 0, 200, 1, 254);//TPS value conversion (from 0x01 to 0xFE)
-      temp_CLT = (((currentStatus.coolant - CALIBRATION_TEMPERATURE_OFFSET) + 48)*4/3); //CLT conversion (actual value to add is 48.373, but close enough)
-      if (temp_CLT > 255) { temp_CLT = 255; } //CLT conversion can yield to higher values than what fits to byte, so limit the maximum value to 255.
+      temp_CLT = ((currentStatus.coolant + 48)*4)/3; //CLT conversion (actual value to add is 48.373, but close enough)
+      if (temp_CLT > UINT8_MAX) { temp_CLT = UINT8_MAX; } //CLT conversion can yield to higher values than what fits to byte, so limit the maximum value to 255.
 
       outMsg.len = 8;
       outMsg.buf[0] = 0x11;  //Multiplexed Information
@@ -238,7 +259,6 @@ void DashMessage(uint16_t DashMessageID)
     break;
 
     case CAN_VAG_VSS:       //VSS for VW instrument cluster
-      uint16_t temp_VSS;
       temp_VSS =  currentStatus.vss * 133U; //VSS conversion
       outMsg.len = 8;
       outMsg.buf[0] = 0xFF;
@@ -255,12 +275,12 @@ void DashMessage(uint16_t DashMessageID)
       temp_MAP = currentStatus.MAP * 10U;
       temp_TPS = currentStatus.TPS * 5U; //TPS value to 0.1. TPS is already in 0.5 increments, so multiply by 5
       outMsg.len = 8;
-      outMsg.buf[0] = lowByte(currentStatus.RPM);
-      outMsg.buf[1] = highByte(currentStatus.RPM);
-      outMsg.buf[2] = lowByte(temp_MAP);
-      outMsg.buf[3] = highByte(temp_MAP);
-      outMsg.buf[4] = lowByte(temp_TPS);
-      outMsg.buf[5] = highByte(temp_TPS);
+      outMsg.buf[0] = highByte(currentStatus.RPM);
+      outMsg.buf[1] = lowByte(currentStatus.RPM);
+      outMsg.buf[2] = highByte(temp_MAP);
+      outMsg.buf[3] = lowByte(temp_MAP);
+      outMsg.buf[4] = highByte(temp_TPS);
+      outMsg.buf[5] = lowByte(temp_TPS);
       //Next 2 bytes are coolant pressure, not supported
       outMsg.buf[6] = 0x00;
       outMsg.buf[7] = 0x00;
@@ -268,13 +288,15 @@ void DashMessage(uint16_t DashMessageID)
 
     case CAN_HALTECH_DATA2:
       temp_fuelLoad = currentStatus.fuelLoad * 10U;
+      temp_fuelPressure = div100(currentStatus.fuelPressure * 6894UL) + 1013; //Convert from PSI to KPA and add 101.3kPa (1 atmosphere) offset. 0.1 scale
+      temp_oilPressure = div100(currentStatus.oilPressure * 6894UL) + 1013; //Convert from PSI to KPA and add 101.3kPa (1 atmosphere) offset. 0.1 scale
       outMsg.len = 8;
-      outMsg.buf[0] = 0x00; //Fuel pressure
-      outMsg.buf[1] = 0x00;
-      outMsg.buf[2] = 0x00; //Oil Pressure
-      outMsg.buf[3] = 0x00;
-      outMsg.buf[4] = lowByte(temp_fuelLoad);
-      outMsg.buf[5] = highByte(temp_fuelLoad);
+      outMsg.buf[0] = highByte(temp_fuelPressure); //Fuel pressure
+      outMsg.buf[1] = lowByte(temp_fuelPressure);
+      outMsg.buf[2] = highByte(temp_oilPressure); //Oil Pressure
+      outMsg.buf[3] = lowByte(temp_oilPressure);
+      outMsg.buf[4] = highByte(temp_fuelLoad);
+      outMsg.buf[5] = lowByte(temp_fuelLoad);
       outMsg.buf[6] = 0x00; //Wastegate pressure
       outMsg.buf[7] = 0x00;
     break;
@@ -286,54 +308,69 @@ void DashMessage(uint16_t DashMessageID)
       if (configPage2.strokes == FOUR_STROKE) { temp_DutyCycle = temp_DutyCycle / 2U; }
 
       outMsg.len = 8;
-      outMsg.buf[0] = lowByte(temp_DutyCycle);
-      outMsg.buf[1] = highByte(temp_DutyCycle);
+      outMsg.buf[0] = highByte(temp_DutyCycle);
+      outMsg.buf[1] = lowByte(temp_DutyCycle);
       outMsg.buf[2] = 0x00; //TODO: Staging Duty Cycle. 
       outMsg.buf[3] = 0x00;
-      outMsg.buf[4] = lowByte(temp_Advance);
-      outMsg.buf[5] = highByte(temp_Advance);
+      outMsg.buf[4] = highByte(temp_Advance);
+      outMsg.buf[5] = lowByte(temp_Advance);
       outMsg.buf[6] = 0x00; //Unused
       outMsg.buf[7] = 0x00; //Unused
     break;
 
     case CAN_HALTECH_PW:
       outMsg.len = 8;
-      outMsg.buf[0] = lowByte(currentStatus.PW1);
-      outMsg.buf[1] = highByte(currentStatus.PW1);
-      outMsg.buf[2] = lowByte(currentStatus.PW2);
-      outMsg.buf[3] = highByte(currentStatus.PW2);
-      outMsg.buf[4] = lowByte(currentStatus.PW3);
-      outMsg.buf[5] = highByte(currentStatus.PW3);
-      outMsg.buf[6] = lowByte(currentStatus.PW4);
-      outMsg.buf[7] = highByte(currentStatus.PW4);
+      outMsg.buf[0] = highByte(currentStatus.PW1);
+      outMsg.buf[1] = lowByte(currentStatus.PW1);
+      outMsg.buf[2] = highByte(currentStatus.PW2);
+      outMsg.buf[3] = lowByte(currentStatus.PW2);
+      outMsg.buf[4] = highByte(currentStatus.PW3);
+      outMsg.buf[5] = lowByte(currentStatus.PW3);
+      outMsg.buf[6] = highByte(currentStatus.PW4);
+      outMsg.buf[7] = lowByte(currentStatus.PW4);
     break;
 
     case CAN_HALTECH_LAMBDA:
       temp_Lambda = (currentStatus.O2 * 1000U) / configPage2.stoich;
       outMsg.len = 8;
-      outMsg.buf[0] = lowByte(temp_Lambda);
-      outMsg.buf[1] = highByte(temp_Lambda);
+      outMsg.buf[0] = highByte(temp_Lambda);
+      outMsg.buf[1] = lowByte(temp_Lambda);
       temp_Lambda = (currentStatus.O2_2 * 1000U) / configPage2.stoich;
-      outMsg.buf[2] = lowByte(temp_Lambda);
-      outMsg.buf[3] = highByte(temp_Lambda);
+      outMsg.buf[2] = highByte(temp_Lambda);
+      outMsg.buf[3] = lowByte(temp_Lambda);
       outMsg.buf[4] = 0x00; //Lambda 3
       outMsg.buf[5] = 0x00; //Lambda 3
       outMsg.buf[6] = 0x00; //Lambda 4
       outMsg.buf[7] = 0x00; //Lambda 4
     break;
 
+    case CAN_HALTECH_VSS:
+      temp_VSS = currentStatus.vss * 10U;
+      temp_VVT1 = currentStatus.vvt1Angle * 10U;
+      temp_VVT2 = currentStatus.vvt2Angle * 10U;
+      outMsg.len = 8;
+      outMsg.buf[0] = highByte(temp_VSS);
+      outMsg.buf[1] = lowByte(temp_VSS);
+      outMsg.buf[2] = 0x00;
+      outMsg.buf[3] = currentStatus.gear;
+      outMsg.buf[4] = highByte(temp_VVT1);
+      outMsg.buf[5] = lowByte(temp_VVT1);
+      outMsg.buf[6] = highByte(temp_VVT2);
+      outMsg.buf[7] = lowByte(temp_VVT2);
+    break;
+
     case CAN_HALTECH_DATA4:
       temp_BoostTarget = currentStatus.boostTarget * 10U;
       temp_Baro = currentStatus.baro * 10U;
       outMsg.len = 8;
-      outMsg.buf[0] = currentStatus.battery10;
-      outMsg.buf[1] = 0x00; //High byte for battery voltage, which is not used (Max battery voltage is 25.5 or 255)
+      outMsg.buf[0] = 0x00; //High byte for battery voltage, which is not used (Max battery voltage is 25.5 or 255)
+      outMsg.buf[1] = currentStatus.battery10;
       outMsg.buf[2] = 0x00; //Unused
       outMsg.buf[3] = 0x00; //Unused
-      outMsg.buf[4] = lowByte(temp_BoostTarget);
-      outMsg.buf[5] = highByte(temp_BoostTarget);
-      outMsg.buf[6] = lowByte(temp_Baro);
-      outMsg.buf[7] = highByte(temp_Baro);
+      outMsg.buf[4] = highByte(temp_BoostTarget);
+      outMsg.buf[5] = lowByte(temp_BoostTarget);
+      outMsg.buf[6] = highByte(temp_Baro);
+      outMsg.buf[7] = lowByte(temp_Baro);
     break;
 
     case CAN_HALTECH_DATA5:
@@ -341,12 +378,12 @@ void DashMessage(uint16_t DashMessageID)
       temp_IAT = (currentStatus.IAT + 273U) * 10U; //Convert to Kelvin and adjust to 0.1
       temp_fuelTemp = (currentStatus.fuelTemp + 273U) * 10U; //Convert to Kelvin and adjust to 0.1
       outMsg.len = 8;
-      outMsg.buf[0] = lowByte(temp_CLT);
-      outMsg.buf[1] = highByte(temp_CLT);
-      outMsg.buf[2] = lowByte(temp_IAT);
-      outMsg.buf[3] = highByte(temp_IAT);
-      outMsg.buf[4] = lowByte(temp_fuelTemp);
-      outMsg.buf[5] = highByte(temp_fuelTemp);
+      outMsg.buf[0] = highByte(temp_CLT);
+      outMsg.buf[1] = lowByte(temp_CLT);
+      outMsg.buf[2] = highByte(temp_IAT);
+      outMsg.buf[3] = lowByte(temp_IAT);
+      outMsg.buf[4] = highByte(temp_fuelTemp);
+      outMsg.buf[5] = lowByte(temp_fuelTemp);
       outMsg.buf[6] = 0x00; //Oil Temperature
       outMsg.buf[7] = 0x00; //Oil Temperature
     break;
@@ -441,7 +478,7 @@ void obd_response(uint8_t PIDmode, uint8_t requestedPIDlow, uint8_t requestedPID
       case 10:        // PID-0x0A , Fuel Pressure (Gauge) , range is 0 to 765 kPa , formula == A / 3)
         uint16_t temp_fuelpressure;
         // Fuel pressure is in PSI. PSI to kPa is 6.89475729, but that needs to be divided by 3 for OBD2 formula. So 2.298.... 2.3 is close enough, so that in fraction.
-        temp_fuelpressure = (currentStatus.fuelPressure * 23) / 10;
+        temp_fuelpressure = udiv_32_16((23u * currentStatus.fuelPressure), 10);
         outMsg.buf[0] =  0x03;    // sending 3 byte
         outMsg.buf[1] =  0x41;    // 
         outMsg.buf[2] =  0x0A;    // pid code
@@ -513,11 +550,10 @@ void obd_response(uint8_t PIDmode, uint8_t requestedPIDlow, uint8_t requestedPID
       break;
 
       case 17:  // PID-0x11 , 
-        // TPS percentage, range is 0 to 100 percent, formula == 100/256 A 
-        uint16_t temp_tpsPC;
-        temp_tpsPC = currentStatus.TPS;
-        obdcalcA = (temp_tpsPC <<8) / 200;     // (tpsPC *256) /200;
-        if (obdcalcA > 255){ obdcalcA = 255;}
+        // TPS percentage, range is 0 to 100 percent, formula == 100/255 A
+        // Faster math with possible to be off by 1(0.329%)
+        obdcalcA = (327u * currentStatus.TPS) >> 8; //327 * 200 = 0xFF78
+        if (obdcalcA > UINT8_MAX){ obdcalcA = UINT8_MAX;}
         outMsg.buf[0] =  0x03;                    // sending 3 bytes
         outMsg.buf[1] =  0x41;                    // Same as query, except that 40h is added to the mode value. So:41h = show current data ,42h = freeze frame ,etc.
         outMsg.buf[2] =  0x11;                    // pid code
@@ -568,10 +604,8 @@ void obd_response(uint8_t PIDmode, uint8_t requestedPIDlow, uint8_t requestedPID
       case 36:      // PID-0x24 O2 sensor2, AB: fuel/air equivalence ratio, CD: voltage ,  Formula == (2/65536)(256A +B) , 8/65536(256C+D) , Range is 0 to <2 and 0 to >8V 
         //uint16_t O2_1e ;
         //int16_t O2_1v ; 
-        obdcalcH16 = configPage2.stoich/10 ;            // configPage2.stoich(is *10 so 14.7 is 147)
-        obdcalcE32 = currentStatus.O2/10;            // afr(is *10 so 25.5 is 255) , needs a 32bit else will overflow
-        obdcalcF32 = (obdcalcE32<<8) / obdcalcH16;      //this is same as (obdcalcE32/256) / obdcalcH16 . this calculates the ratio      
-        obdcalcG16 = (obdcalcF32 *32768)>>8;          
+        obdcalcF32 = currentStatus.O2;            // afr(is *10 so 25.5 is 255) , needs a 32bit else will overflow
+        obdcalcG16 = udiv_32_16((obdcalcF32 * 32768u), configPage2.stoich);
         obdcalcA = highByte(obdcalcG16);
         obdcalcB = lowByte(obdcalcG16);       
 
@@ -593,10 +627,8 @@ void obd_response(uint8_t PIDmode, uint8_t requestedPIDlow, uint8_t requestedPID
       case 37:      //O2 sensor2, AB fuel/air equivalence ratio, CD voltage ,  2/65536(256A +B) ,8/65536(256C+D) , range is 0 to <2 and 0 to >8V
         //uint16_t O2_2e ;
         //int16_t O2_2V ; 
-        obdcalcH16 = configPage2.stoich/10 ;            // configPage2.stoich(is *10 so 14.7 is 147)
-        obdcalcE32 = currentStatus.O2_2/10;            // afr(is *10 so 25.5 is 255) , needs a 32bit else will overflow
-        obdcalcF32 = (obdcalcE32<<8) / obdcalcH16;      //this is same as (obdcalcE32/256) / obdcalcH16 . this calculates the ratio      
-        obdcalcG16 = (obdcalcF32 *32768)>>8;          
+        obdcalcF32 = currentStatus.O2_2;            // afr(is *10 so 25.5 is 255) , needs a 32bit else will overflow
+        obdcalcG16 = udiv_32_16((obdcalcF32 * 32768u), configPage2.stoich);
         obdcalcA = highByte(obdcalcG16);
         obdcalcB = lowByte(obdcalcG16);       
 
@@ -666,10 +698,13 @@ void obd_response(uint8_t PIDmode, uint8_t requestedPIDlow, uint8_t requestedPID
       break;
 
       case 82:        //PID-0x52 Ethanol fuel % , range is 0 to 100% , formula == (100/255)A
+        //Ethanol sensor output can be above 100, add a check to avoid it
+        obdcalcA = (655u * currentStatus.ethanolPct) >> 8; //655 * 100 = 0xFFDC
+        if (obdcalcA > UINT8_MAX){ obdcalcA = UINT8_MAX;}
         outMsg.buf[0] =  0x03;                       // sending 3 byte
         outMsg.buf[1] =  0x41;                       // Same as query, except that 40h is added to the mode value. So:41h = show current data ,42h = freeze frame ,etc. 
         outMsg.buf[2] =  0x52;                       // pid code
-        outMsg.buf[3] =  currentStatus.ethanolPct;   // A
+        outMsg.buf[3] =  obdcalcA;                   // A
         outMsg.buf[4] =  0x00;
         outMsg.buf[5] =  0x00; 
         outMsg.buf[6] =  0x00; 

@@ -14,7 +14,6 @@ A full copy of the license may be found in the projects root directory
 #include "utilities.h"
 #include "decoders.h"
 #include "TS_CommandButtonHandler.h"
-#include "errors.h"
 #include "pages.h"
 #include "page_crc.h"
 #include "logger.h"
@@ -67,10 +66,10 @@ static constexpr uint8_t SEND_OUTPUT_CHANNELS = 48U; //!< Code for the "send out
 /// @{
 static constexpr byte serialVersion[] PROGMEM = {SERIAL_RC_OK, '0', '0', '2'};
 static constexpr byte canId[] PROGMEM = {SERIAL_RC_OK, 0};
-static constexpr byte codeVersion[] PROGMEM = { SERIAL_RC_OK, 's','p','e','e','d','u','i','n','o',' ','2','0','2','4','0','5','-','d','e','v'} ; //Note no null terminator in array and status variable at the start
-static constexpr byte productString[] PROGMEM = { SERIAL_RC_OK, 'S', 'p', 'e', 'e', 'd', 'u', 'i', 'n', 'o', ' ', '2', '0', '2', '4', '.', '0', '5', '-', 'd', 'e', 'v'};
-//static constexpr byte codeVersion[] PROGMEM = { SERIAL_RC_OK, 's','p','e','e','d','u','i','n','o',' ','2','0','2','4','0','2'} ; //Note no null terminator in array and status variable at the start
-//static constexpr byte productString[] PROGMEM = { SERIAL_RC_OK, 'S', 'p', 'e', 'e', 'd', 'u', 'i', 'n', 'o', ' ', '2', '0', '2', '4', '.', '0', '2'};
+//static constexpr byte codeVersion[] PROGMEM = { SERIAL_RC_OK, 's','p','e','e','d','u','i','n','o',' ','2','0','2','4','0','5','-','d','e','v'} ; //Note no null terminator in array and status variable at the start
+//static constexpr byte productString[] PROGMEM = { SERIAL_RC_OK, 'S', 'p', 'e', 'e', 'd', 'u', 'i', 'n', 'o', ' ', '2', '0', '2', '4', '.', '0', '5', '-', 'd', 'e', 'v'};
+static constexpr byte codeVersion[] PROGMEM = { SERIAL_RC_OK, 's','p','e','e','d','u','i','n','o',' ','2','0','2','5','0','1'} ; //Note no null terminator in array and status variable at the start
+static constexpr byte productString[] PROGMEM = { SERIAL_RC_OK, 'S', 'p', 'e', 'e', 'd', 'u', 'i', 'n', 'o', ' ', '2', '0', '2', '5', '.', '0', '1', '.','2'};
 static constexpr byte testCommsResponse[] PROGMEM = { SERIAL_RC_OK, 255 };
 /// @}
 
@@ -81,10 +80,11 @@ static constexpr byte testCommsResponse[] PROGMEM = { SERIAL_RC_OK, 255 };
  */
 static uint16_t serialBytesRxTx = 0; 
 
-static constexpr uint16_t SERIAL_TIMEOUT = 700; //!< Timeout threshold in milliseconds
-static uint32_t serialReceiveStartTime = 0; //!< The time in milliseconds at which the serial receive started. Used for calculating whether a timeout has occurred
+static constexpr uint16_t SERIAL_TIMEOUT = 400; //!< Timeout threshold in milliseconds
+uint32_t serialReceiveStartTime = 0; //!< The time in milliseconds at which the serial receive started. Used for calculating whether a timeout has occurred
 
 static FastCRC32 CRC32_serial; //!< Support accumulation of a CRC during non-blocking operations
+static FastCRC32 CRC32_calibration; //!< Support accumulation of a CRC during calibration loads. Must be a separate instance to CRC32_serial due to calibration data being sent in multiple packets
 using crc_t = uint32_t;
 
 #ifdef COMMS_SD
@@ -101,6 +101,7 @@ static uint32_t SDreadCompletedSectors = 0;
 #endif
 static uint8_t serialPayload[SERIAL_BUFFER_SIZE]; //!< Serial payload buffer
 static uint16_t serialPayloadLength = 0; //!< How many bytes in serialPayload were received or sent
+Stream* pPrimarySerial;
 
 #if defined(CORE_AVR)
 #pragma GCC push_options
@@ -109,7 +110,8 @@ static uint16_t serialPayloadLength = 0; //!< How many bytes in serialPayload we
 #endif
 
 /** @brief Has the current receive operation timed out? */
-static inline bool isRxTimeout(void) {
+bool isRxTimeout(void) 
+{
   return (millis() - serialReceiveStartTime) > SERIAL_TIMEOUT;
 }
 
@@ -120,7 +122,7 @@ static inline bool isRxTimeout(void) {
  */
 void flushRXbuffer(void)
 {
-  while (Serial.available() > 0) { Serial.read(); }
+  while (primarySerial.available() > 0) { primarySerial.read(); }
 }
 
 /** @brief Reverse the byte order of a uint32_t
@@ -138,12 +140,13 @@ static __attribute__((noinline)) uint32_t reverse_bytes(uint32_t i)
 
 // ====================================== Blocking IO Support ================================
 
-void writeByteReliableBlocking(byte value) {
+void writeByteReliableBlocking(byte value) 
+{
   // Some platforms (I'm looking at you Teensy 3.5) do not mimic the Arduino 1.0
   // contract which synchronously blocks. 
-  // https://github.com/PaulStoffregen/cores/blob/master/teensy3/usb_serial.c#L215
-  while (!Serial.availableForWrite()) { /* Wait for the buffer to free up space */ }
-  Serial.write(value);
+  // https://github.com/PaulStoffregen/cores/blob/master/teensy3/usb_primarySerial.c#L215
+  while (!primarySerial.availableForWrite()) { /* Wait for the buffer to free up space */ }
+  primarySerial.write(value);
 }
 
 // ====================================== Multibyte Primitive Type IO Support =============================
@@ -154,12 +157,9 @@ void writeByteReliableBlocking(byte value) {
 static void readSerialTimeout(char *buffer, size_t length) {
   // Teensy 3.5: Serial.available() should only be used as a boolean test
   // See https://www.pjrc.com/teensy/td_serial.html#singlebytepackets
-  while (length>0U) {
-    if (Serial.available()!=0) {
-      buffer[--length] =(byte)Serial.read();
-    } else if(isRxTimeout()) {
-      return;
-    } else { /* MISRA - no-op */ }
+  while( (length > 0U) && (!isRxTimeout()) )
+  {
+    if(primarySerial.available() != 0) { buffer[--length] = (byte)primarySerial.read(); } 
   }
 }
 
@@ -169,7 +169,8 @@ static void readSerialTimeout(char *buffer, size_t length) {
  * @tparam TIntegral The integral type. E.g. uint16_t 
  */
 template <typename TIntegral>
-static __attribute__((noinline)) TIntegral readSerialIntegralTimeout(void) {
+static __attribute__((noinline)) TIntegral readSerialIntegralTimeout(void) 
+{
   // We use type punning to read into a buffer and convert to the appropriate type
   union {
     char raw[sizeof(TIntegral)];
@@ -214,9 +215,9 @@ static uint16_t writeNonBlocking(const byte *buffer, size_t length)
   uint16_t bytesTransmitted = 0;
 
   while (bytesTransmitted<length 
-        && Serial.availableForWrite() != 0 
+        && primarySerial.availableForWrite() != 0 
         // Just in case
-        && Serial.write(buffer[bytesTransmitted]) == 1)
+        && primarySerial.write(buffer[bytesTransmitted]) == 1)
   {
     bytesTransmitted++;
   }
@@ -399,7 +400,7 @@ static void loadO2CalibrationChunk(uint16_t offset, uint16_t chunkSize)
     }
 
     //Update the CRC
-    calibrationCRC = (CRC32_serial.*pCrcFun)(&serialPayload[x+7U], 1, false);
+    calibrationCRC = (CRC32_calibration.*pCrcFun)(&serialPayload[x+7U], 1, false);
     // Subsequent passes through the loop, we need to UPDATE the CRC
     pCrcFun = &FastCRC32::crc32_upd;
   }
@@ -443,7 +444,7 @@ static void processTemperatureCalibrationTableUpdate(uint16_t calibrationLength,
       values[x] = toTemperature(serialPayload[(2U * x) + 7U], serialPayload[(2U * x) + 8U]);
       bins[x] = (x * 33U); // 0*33=0 to 31*33=1023
     }
-    storeCalibrationCRC32(calibrationPage, CRC32_serial.crc32(&serialPayload[7], 64));
+    storeCalibrationCRC32(calibrationPage, CRC32_calibration.crc32(&serialPayload[7], 64));
     writeCalibrationPage(calibrationPage);
     sendReturnCodeMsg(SERIAL_RC_OK);
   }
@@ -470,11 +471,14 @@ void serialReceive(void)
     return;
   }
 
-  if (Serial.available()!=0 && serialStatusFlag == SERIAL_INACTIVE)
+  if (primarySerial.available()!=0 && serialStatusFlag == SERIAL_INACTIVE)
   { 
     //New command received
     //Need at least 2 bytes to read the length of the command
-    char highByte = (char)Serial.peek();
+    byte highByte = (byte)primarySerial.peek();
+
+    //Check for DTR reset byte. This is sent by Windows upon initial connection and causes issues if treated as the first real byte. It should simply be ignored. See https://github.com/speeduino/speeduino/issues/1112
+    if(highByte == 0xF0) { primarySerial.read(); return; }
 
     //Check if the command is legacy using the call/response mechanism
     if(highByte == 'F')
@@ -493,7 +497,8 @@ void serialReceive(void)
     {
       serialReceiveStartTime = millis();
       serialPayloadLength = readSerialIntegralTimeout<uint16_t>();
-      if (!isRxTimeout()) {
+      if (!isRxTimeout()) 
+      {
         serialBytesRxTx = 0U;
         serialStatusFlag = SERIAL_RECEIVE_INPROGRESS; //Flag the serial receive as being in progress
       }
@@ -501,11 +506,11 @@ void serialReceive(void)
   }
 
   //If there is a serial receive in progress, read as much from the buffer as possible or until we receive all bytes
-  while( (Serial.available() > 0) && (serialStatusFlag == SERIAL_RECEIVE_INPROGRESS) )
+  while( (primarySerial.available() > 0) && (serialStatusFlag == SERIAL_RECEIVE_INPROGRESS) )
   {
     if (serialBytesRxTx < serialPayloadLength )
     {
-      serialPayload[serialBytesRxTx] = (byte)Serial.read();
+      serialPayload[serialBytesRxTx] = (byte)primarySerial.read();
       ++serialBytesRxTx;
     }
     else
@@ -822,8 +827,6 @@ void processSerialCommand(void)
           }
           serialPayload[payloadIndex] = lowByte(SDcurrentDirChunk);
           serialPayload[payloadIndex + 1] = highByte(SDcurrentDirChunk);
-          //Serial.print("Index:");
-          //Serial.print(payloadIndex);
 
           sendSerialPayloadNonBlocking(payloadIndex + 2);
         }
@@ -890,7 +893,7 @@ void processSerialCommand(void)
       {
         loadO2CalibrationChunk(offset, calibrationLength);
         sendReturnCodeMsg(SERIAL_RC_OK);
-        Serial.flush(); //This is safe because engine is assumed to not be running during calibration
+        primarySerial.flush(); //This is safe because engine is assumed to not be running during calibration
       }
       else if(cmd == IAT_CALIBRATION_PAGE)
       {
@@ -911,16 +914,16 @@ void processSerialCommand(void)
       if (resetControl != RESET_CONTROL_DISABLED)
       {
       #ifndef SMALL_FLASH_MODE
-        if (serialStatusFlag == SERIAL_INACTIVE) { Serial.println(F("Comms halted. Next byte will reset the Arduino.")); }
+        if (serialStatusFlag == SERIAL_INACTIVE) { primarySerial.println(F("Comms halted. Next byte will reset the Arduino.")); }
       #endif
 
-        while (Serial.available() == 0) { }
+        while (primarySerial.available() == 0) { }
         digitalWrite(pinResetControl, LOW);
       }
       else
       {
       #ifndef SMALL_FLASH_MODE
-        if (serialStatusFlag == SERIAL_INACTIVE) { Serial.println(F("Reset control is currently disabled.")); }
+        if (serialStatusFlag == SERIAL_INACTIVE) { primarySerial.println(F("Reset control is currently disabled.")); }
       #endif
       }
       break;
@@ -1096,7 +1099,7 @@ void sendToothLog(void)
   for (; logItemsTransmitted < TOOTH_LOG_SIZE; logItemsTransmitted++)
   {
     //Check whether the tx buffer still has space
-    if(Serial.availableForWrite() < 4) 
+    if(primarySerial.availableForWrite() < 4) 
     { 
       //tx buffer is full. Store the current state so it can be resumed later
       serialStatusFlag = SERIAL_TRANSMIT_TOOTH_INPROGRESS;
@@ -1149,7 +1152,7 @@ void sendCompositeLog(void)
   for (; logItemsTransmitted < TOOTH_LOG_SIZE; logItemsTransmitted++)
   {
     //Check whether the tx buffer still has space
-    if((uint16_t)Serial.availableForWrite() < sizeof(toothHistory[logItemsTransmitted])+sizeof(compositeLogHistory[logItemsTransmitted])) 
+    if((uint16_t)primarySerial.availableForWrite() < sizeof(toothHistory[logItemsTransmitted])+sizeof(compositeLogHistory[logItemsTransmitted])) 
     { 
       //tx buffer is full. Store the current state so it can be resumed later
       serialStatusFlag = SERIAL_TRANSMIT_COMPOSITE_INPROGRESS;

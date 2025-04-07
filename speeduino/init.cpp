@@ -7,6 +7,7 @@
 #include "updates.h"
 #include "speeduino.h"
 #include "timers.h"
+#include "comms.h"
 #include "comms_secondary.h"
 #include "comms_CAN.h"
 #include "utilities.h"
@@ -27,6 +28,12 @@
 #ifdef SD_LOGGING
   #include "SD_logger.h"
   #include "rtc_common.h"
+#endif
+
+#if defined(CORE_AVR)
+#pragma GCC push_options
+// This minimizes RAM usage at no performance cost
+#pragma GCC optimize ("Os") 
 #endif
 
 #if !defined(UNIT_TEST)
@@ -152,10 +159,16 @@ void initialiseAll(void)
     
   #ifdef SD_LOGGING
     initRTC();
-    initSD();
+    if(configPage13.onboard_log_file_style) { initSD(); }
   #endif
 
+//Teensy 4.1 does not require .begin() to be called. This introduces a 700ms delay on startup time whilst USB is enumerated if it is called
+#ifndef CORE_TEENSY41
     Serial.begin(115200);
+    #else
+    teensy41_customSerialBegin();
+#endif
+    pPrimarySerial = &Serial; //Default to standard Serial interface
     BIT_SET(currentStatus.status4, BIT_STATUS4_ALLOW_LEGACY_COMMS); //Flag legacy comms as being allowed on startup
 
     //Repoint the 2D table structs to the config pages that were just loaded
@@ -228,18 +241,19 @@ void initialiseAll(void)
     initialiseCorrections();
     BIT_CLEAR(currentStatus.engineProtectStatus, PROTECT_IO_ERROR); //Clear the I/O error bit. The bit will be set in initialiseADC() if there is problem in there.
     initialiseADC();
+    initialiseMAPBaro();
     initialiseProgrammableIO();
 
     //Check whether the flex sensor is enabled and if so, attach an interrupt for it
     if(configPage2.flexEnabled > 0)
     {
-      attachInterrupt(digitalPinToInterrupt(pinFlex), flexPulse, CHANGE);
+      if(!pinIsReserved(pinFlex)) { attachInterrupt(digitalPinToInterrupt(pinFlex), flexPulse, CHANGE); }
       currentStatus.ethanolPct = 0;
     }
     //Same as above, but for the VSS input
     if(configPage2.vssMode > 1) // VSS modes 2 and 3 are interrupt drive (Mode 1 is CAN)
     {
-      attachInterrupt(digitalPinToInterrupt(pinVSS), vssPulse, RISING);
+      if(!pinIsReserved(pinVSS)) { attachInterrupt(digitalPinToInterrupt(pinVSS), vssPulse, RISING); }
     }
     //As above but for knock pulses
     if(configPage10.knock_mode == KNOCK_MODE_DIGITAL)
@@ -247,8 +261,11 @@ void initialiseAll(void)
       if(configPage10.knock_pullup) { pinMode(configPage10.knock_pin, INPUT_PULLUP); }
       else { pinMode(configPage10.knock_pin, INPUT); }
 
-      if(configPage10.knock_trigger == KNOCK_TRIGGER_HIGH) { attachInterrupt(digitalPinToInterrupt(configPage10.knock_pin), knockPulse, RISING); }
-      else { attachInterrupt(digitalPinToInterrupt(configPage10.knock_pin), knockPulse, FALLING); }
+      if(!pinIsReserved(configPage10.knock_pin)) 
+      { 
+        if(configPage10.knock_trigger == KNOCK_TRIGGER_HIGH) { attachInterrupt(digitalPinToInterrupt(configPage10.knock_pin), knockPulse, RISING); }
+        else { attachInterrupt(digitalPinToInterrupt(configPage10.knock_pin), knockPulse, FALLING); }
+      }
     }
 
     //Once the configs have been loaded, a number of one time calculations can be completed
@@ -301,11 +318,7 @@ void initialiseAll(void)
     fixedCrankingOverride = 0;
     timer5_overflow_count = 0;
     toothHistoryIndex = 0;
-    toothLastToothTime = 0;
-
-    //Lookup the current MAP reading for barometric pressure
-    instanteneousMAPReading();
-    readBaro();
+    resetDecoder();
     
     noInterrupts();
     initialiseTriggers();
@@ -2329,7 +2342,7 @@ void setPinMapping(byte boardID)
         pinTrigger2 = 21; //The Cam Sensor pin
 
         pinFuelPump = 5; //Fuel pump output
-        pinTachOut = 8; //Tacho output pin
+        pinTachOut = 0; //Tacho output pin
 
         pinResetControl = 49; //PLaceholder only. Cannot use 42-47 as these are the SD card
 
@@ -3604,8 +3617,8 @@ void initialiseTriggers(void)
   }
 
   #if defined(CORE_TEENSY41)
-    //Teensy 4 requires a HYSTERESIS flag to be set on the trigger pins to prevent false interrupts
-    setTriggerHysteresis();
+    //Teensy 4 requires a HYSTERESIS flag to be set on any external interrupt pins to prevent false interrupts
+    setTeensy41PinsHysteresis();
   #endif
 }
 
@@ -3843,3 +3856,7 @@ void changeFullToHalfSync(void)
     }
   }
 }
+
+#if defined(CORE_AVR)
+#pragma GCC pop_options
+#endif

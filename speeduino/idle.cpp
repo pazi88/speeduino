@@ -314,17 +314,10 @@ static inline byte checkForStepping(void)
         //Means we're currently in a step, but it needs to be turned off
         digitalWrite(pinStepperStep, LOW); //Turn off the step
         idleStepper.stepStartTime = micros_safe();
-        
-        // if there is no cool time we can miss that step out completely.
-        if (iacCoolTime_uS > 0)
-        {
-          idleStepper.stepperStatus = COOLING; //'Cooling' is the time the stepper needs to sit in LOW state before the next step can be made
-        }
-        else
-        {
-          idleStepper.stepperStatus = SOFF;  
-        }
-          
+
+	//Set status to COOLING. In next cycle, status will be set to SOFF and set stepper power OFF based on given settings
+        idleStepper.stepperStatus = COOLING; //'Cooling' is the time the stepper needs to sit in LOW state before the next step can be made
+                  
         isStepping = true;
       }
       else
@@ -333,8 +326,8 @@ static inline byte checkForStepping(void)
         idleStepper.stepperStatus = SOFF;
         if(configPage9.iacStepperPower == STEPPER_POWER_WHEN_ACTIVE) 
         { 
-          //Disable the DRV8825, but only if we're at the final step in this cycle. 
-          if ( (idleStepper.targetIdleStep > (idleStepper.curIdleStep - configPage6.iacStepHyster)) && (idleStepper.targetIdleStep < (idleStepper.curIdleStep + configPage6.iacStepHyster)) ) //Hysteresis check
+          //Disable the DRV8825, but only if we're at the final step in this cycle or within the hysteresis range. 
+          if ( (idleStepper.curIdleStep >= (idleStepper.targetIdleStep - configPage6.iacStepHyster)) && (idleStepper.curIdleStep <= (idleStepper.targetIdleStep + configPage6.iacStepHyster))) //Hysteresis check
           { 
             digitalWrite(pinStepperEnable, HIGH); 
           } 
@@ -665,7 +658,7 @@ void idleControl(void)
         {
           idleStepper.targetIdleStep = configPage9.iacMaxSteps * 3;
         }
-        if( ((uint16_t)configPage9.iacMaxSteps * 3) > 255 ) { currentStatus.idleLoad = idleStepper.curIdleStep / 2; }//Current step count (Divided by 2 for byte)
+        if( ((uint16_t)configPage9.iacMaxSteps * 3) > UINT8_MAX ) { currentStatus.idleLoad = idleStepper.curIdleStep / 2; }//Current step count (Divided by 2 for byte)
         else { currentStatus.idleLoad = idleStepper.curIdleStep; }
         doStep();
       }
@@ -744,7 +737,7 @@ void idleControl(void)
         {
           idleStepper.targetIdleStep = configPage9.iacMaxSteps * 3;
         }
-        if( ( (uint16_t)configPage9.iacMaxSteps * 3) > 255 ) { currentStatus.idleLoad = idleStepper.curIdleStep / 2; }//Current step count (Divided by 2 for byte)
+        if( ( (uint16_t)configPage9.iacMaxSteps * 3) > UINT8_MAX ) { currentStatus.idleLoad = idleStepper.curIdleStep / 2; }//Current step count (Divided by 2 for byte)
         else { currentStatus.idleLoad = idleStepper.curIdleStep; }
         doStep();
       }
