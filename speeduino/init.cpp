@@ -2319,12 +2319,6 @@ void setPinMapping(byte boardID)
       #endif
 
       #if defined(CORE_TEENSY41)
-        pinTPS = A17; //TPS input pin
-        pinIAT = A14; //IAT sensor pin
-        pinCLT = A15; //CLS sensor pin
-        pinO2 = A16; //O2 Sensor pin
-        pinBat = A3; //Battery reference voltage pin. Needs Alpha4+
-
         //New pins for the actual T4.1 version of the Dropbear
         pinBaro = A4; 
         pinMAP = A5;
@@ -2340,6 +2334,7 @@ void setPinMapping(byte boardID)
 
         pinTrigger = 20; //The CAS pin
         pinTrigger2 = 21; //The Cam Sensor pin
+        pinTrigger3 = 34; //Uses one of the protected spare digital inputs.
 
         pinFuelPump = 5; //Fuel pump output
         pinTachOut = 0; //Tacho output pin
@@ -3603,6 +3598,24 @@ void initialiseTriggers(void)
       else { primaryTriggerEdge = FALLING; }
       
       attachInterrupt(triggerInterrupt, triggerHandler, primaryTriggerEdge);
+      break;
+
+      case DECODER_FORD_TFI:
+      // Ford TFI
+      triggerSetup_FordTFI();
+      triggerHandler = triggerPri_FordTFI;
+      triggerSecondaryHandler = triggerSec_FordTFI;
+      getRPM = getRPM_FordTFI;
+      getCrankAngle = getCrankAngle_FordTFI;
+      triggerSetEndTeeth = triggerSetEndTeeth_FordTFI;
+
+      if(configPage4.TrigEdge == 0) { primaryTriggerEdge = RISING; } // Attach the crank trigger wheel interrupt (Hall sensor drags to ground when triggering)
+      else { primaryTriggerEdge = FALLING; }
+      if(configPage4.TrigEdgeSec == 0) { secondaryTriggerEdge = RISING; }
+      else { secondaryTriggerEdge = FALLING; }
+
+      attachInterrupt(triggerInterrupt, triggerHandler, primaryTriggerEdge);
+      attachInterrupt(triggerInterrupt2, triggerSecondaryHandler, secondaryTriggerEdge);
       break;
 
 
