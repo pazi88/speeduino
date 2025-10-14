@@ -6,6 +6,7 @@
 #include "scheduler.h"
 #include "timers.h"
 #include "comms_secondary.h"
+#include <InternalTemperature.h>
 
 /*
   //These are declared locally in comms_CAN now due to this issue: https://github.com/tonton81/FlexCAN_T4/issues/67
@@ -54,6 +55,8 @@ void initBoard()
       PIT_TCTRL0 |= PIT_TCTRL_TIE; // enable Timer 1 interrupts
       PIT_TCTRL0 |= PIT_TCTRL_TEN; // start Timer 1
       PIT_LDVAL0 = 1; //1 * 2uS = 2uS
+
+      idle_pwm_max_count = (uint16_t)(MICROS_PER_SEC / (2U * configPage6.idleFreq * 2U)); //Converts the frequency in Hz to the number of ticks (at 2uS) it takes to complete 1 cycle. Note that the frequency is divided by 2 coming from TS to allow for up to 512hz
     }
 
     /*
@@ -307,6 +310,48 @@ time_t getTeensy3Time()
 void doSystemReset() { return; }
 void jumpToBootloader() { return; }
 
+//Checks if the request pin is being used for rx/tx on secondary serial. Primary (USB) serial does not need to be checked as it is not broken out to an IO on Teensy
+//The Secondary serial that it checks against is based on that one set by the pinMapping
+bool pinIsSerial(uint8_t pin)
+{
+  bool isSerial = false;
+
+  if(&secondarySerial == &Serial1)
+  {
+    if( (pin == 0) || (pin == 1) ) { isSerial = true; }
+  }
+  else if(&secondarySerial == &Serial2)
+  {
+    if( (pin == 7) || (pin == 8) ) { isSerial = true; }
+  }
+  else if(&secondarySerial == &Serial3)
+  {
+    if( (pin == 14) || (pin == 15) ) { isSerial = true; }
+  }
+  else if(&secondarySerial == &Serial4)
+  {
+    if( (pin == 16) || (pin == 17) ) { isSerial = true; }
+  }
+  else if(&secondarySerial == &Serial5)
+  {
+    if( (pin == 20) || (pin == 21) ) { isSerial = true; }
+  }
+  else if(&secondarySerial == &Serial6)
+  {
+    if( (pin == 24) || (pin == 25) ) { isSerial = true; }
+  }
+  else if(&secondarySerial == &Serial7)
+  {
+    if( (pin == 28) || (pin == 29) ) { isSerial = true; }
+  }
+  else if(&secondarySerial == &Serial8)
+  {
+    if( (pin == 34) || (pin == 35) ) { isSerial = true; }
+  }
+
+  return isSerial;
+}
+
 void setPinHysteresis(uint8_t pin)
 {
   //Refer to digital.c in the Teensyduino core for the following code
@@ -349,6 +394,11 @@ void teensy41_customSerialBegin()
     if (elapsed > 250) break;
     yield();
   }
+}
+
+uint8_t getSystemTemp()
+{
+  return trunc(InternalTemperature.readTemperatureC());
 }
 
 #endif

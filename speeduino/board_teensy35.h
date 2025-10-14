@@ -11,6 +11,7 @@
   void doSystemReset();
   void jumpToBootloader();
   time_t getTeensy3Time();
+  uint8_t getSystemTemp();
   #define PORT_TYPE uint8_t //Size of the port variables
   #define PINMASK_TYPE uint8_t
   #define COMPARE_TYPE uint16_t
@@ -156,8 +157,6 @@
 ***********************************************************************************************************
 * CAN / Second serial
 */
-  #define USE_SERIAL3               // Secondary serial port to use
-  #define secondarySerial_AVAILABLE
   #define SECONDARY_SERIAL_T HardwareSerial
 
   #include <FlexCAN_T4.h>

@@ -11,8 +11,7 @@ A full copy of the license may be found in the projects root directory
 #include EEPROM_LIB_H //This is defined in the board .h files
 #include "storage.h"
 #include "pages.h"
-#include "table3d_axis_io.h"
-
+#include "sensors.h"
 
 #define EEPROM_DATA_VERSION   0
 
@@ -24,14 +23,14 @@ A full copy of the license may be found in the projects root directory
 
 
 // Calibration data is stored at the end of the EEPROM (This is in case any further calibration tables are needed as they are large blocks)
-#define STORAGE_END 0xFFF       // Should be E2END?
-#define EEPROM_CALIBRATION_CLT_VALUES (STORAGE_END-sizeof(cltCalibration_values))
-#define EEPROM_CALIBRATION_CLT_BINS   (EEPROM_CALIBRATION_CLT_VALUES-sizeof(cltCalibration_bins))
-#define EEPROM_CALIBRATION_IAT_VALUES (EEPROM_CALIBRATION_CLT_BINS-sizeof(iatCalibration_values))
-#define EEPROM_CALIBRATION_IAT_BINS   (EEPROM_CALIBRATION_IAT_VALUES-sizeof(iatCalibration_bins))
-#define EEPROM_CALIBRATION_O2_VALUES  (EEPROM_CALIBRATION_IAT_BINS-sizeof(o2Calibration_values))
-#define EEPROM_CALIBRATION_O2_BINS    (EEPROM_CALIBRATION_O2_VALUES-sizeof(o2Calibration_bins))
-#define EEPROM_LAST_BARO              (EEPROM_CALIBRATION_O2_BINS-1)
+static constexpr uint16_t STORAGE_END = 0xFFF;
+static constexpr uint16_t EEPROM_CALIBRATION_CLT_VALUES = STORAGE_END-(uint16_t)sizeof(decltype(cltCalibrationTable)::values);
+static constexpr uint16_t EEPROM_CALIBRATION_CLT_BINS =  EEPROM_CALIBRATION_CLT_VALUES-(uint16_t)sizeof(decltype(cltCalibrationTable)::axis);
+static constexpr uint16_t EEPROM_CALIBRATION_IAT_VALUES = EEPROM_CALIBRATION_CLT_BINS-(uint16_t)sizeof(decltype(iatCalibrationTable)::values);
+static constexpr uint16_t EEPROM_CALIBRATION_IAT_BINS = EEPROM_CALIBRATION_IAT_VALUES-(uint16_t)sizeof(decltype(iatCalibrationTable)::axis);
+static constexpr uint16_t EEPROM_CALIBRATION_O2_VALUES = EEPROM_CALIBRATION_IAT_BINS-(uint16_t)sizeof(decltype(o2CalibrationTable)::values);
+static constexpr uint16_t EEPROM_CALIBRATION_O2_BINS =   EEPROM_CALIBRATION_O2_VALUES-(uint16_t)sizeof(decltype(o2CalibrationTable)::axis);
+static constexpr uint16_t EEPROM_LAST_BARO = (EEPROM_CALIBRATION_O2_BINS-(uint16_t)1);
 
 
 uint32_t deferEEPROMWritesUntil = 0;
@@ -127,10 +126,9 @@ static inline write_location write(table_value_iterator it, write_location locat
 
 static inline write_location write(table_axis_iterator it, write_location location)
 {
-  const table3d_axis_io_converter converter = get_table3d_axis_converter(it.get_domain());
   while (location.can_write() && !it.at_end())
   {
-    location.update(converter.to_byte(*it));
+    location.update(*it);
     ++location;
     ++it;
   }
@@ -390,10 +388,9 @@ static inline eeprom_address_t load(table_value_iterator it, eeprom_address_t ad
 
 static inline eeprom_address_t load(table_axis_iterator it, eeprom_address_t address)
 {
-    const table3d_axis_io_converter converter = get_table3d_axis_converter(it.get_domain());
   while (!it.at_end())
   {
-    *it = converter.from_byte(EEPROM.read(address));
+    *it = EEPROM.read(address);
     ++address;
     ++it;
   }
@@ -491,14 +488,14 @@ void loadCalibration(void)
   // If you modify this function be sure to also modify writeCalibration();
   // it should be a mirror image of this function.
 
-  EEPROM.get(EEPROM_CALIBRATION_O2_BINS, o2Calibration_bins);
-  EEPROM.get(EEPROM_CALIBRATION_O2_VALUES, o2Calibration_values);
-  
-  EEPROM.get(EEPROM_CALIBRATION_IAT_BINS, iatCalibration_bins);
-  EEPROM.get(EEPROM_CALIBRATION_IAT_VALUES, iatCalibration_values);
+  EEPROM.get(EEPROM_CALIBRATION_O2_BINS, o2CalibrationTable.axis);
+  EEPROM.get(EEPROM_CALIBRATION_O2_VALUES, o2CalibrationTable.values);
 
-  EEPROM.get(EEPROM_CALIBRATION_CLT_BINS, cltCalibration_bins);
-  EEPROM.get(EEPROM_CALIBRATION_CLT_VALUES, cltCalibration_values);
+  EEPROM.get(EEPROM_CALIBRATION_IAT_BINS, iatCalibrationTable.axis);
+  EEPROM.get(EEPROM_CALIBRATION_IAT_VALUES, iatCalibrationTable.values);
+
+  EEPROM.get(EEPROM_CALIBRATION_CLT_BINS, cltCalibrationTable.axis);
+  EEPROM.get(EEPROM_CALIBRATION_CLT_VALUES, cltCalibrationTable.values);
 }
 
 /** Write calibration tables to EEPROM.
@@ -509,33 +506,27 @@ void writeCalibration(void)
 {
   // If you modify this function be sure to also modify loadCalibration();
   // it should be a mirror image of this function.
-
-  EEPROM.put(EEPROM_CALIBRATION_O2_BINS, o2Calibration_bins);
-  EEPROM.put(EEPROM_CALIBRATION_O2_VALUES, o2Calibration_values);
-  
-  EEPROM.put(EEPROM_CALIBRATION_IAT_BINS, iatCalibration_bins);
-  EEPROM.put(EEPROM_CALIBRATION_IAT_VALUES, iatCalibration_values);
-
-  EEPROM.put(EEPROM_CALIBRATION_CLT_BINS, cltCalibration_bins);
-  EEPROM.put(EEPROM_CALIBRATION_CLT_VALUES, cltCalibration_values);
+  writeCalibrationPage(O2_CALIBRATION_PAGE);
+  writeCalibrationPage(IAT_CALIBRATION_PAGE);
+  writeCalibrationPage(CLT_CALIBRATION_PAGE);
 }
 
 void writeCalibrationPage(uint8_t pageNum)
 {
   if(pageNum == O2_CALIBRATION_PAGE)
   {
-    EEPROM.put(EEPROM_CALIBRATION_O2_BINS, o2Calibration_bins);
-    EEPROM.put(EEPROM_CALIBRATION_O2_VALUES, o2Calibration_values);
+    EEPROM.put(EEPROM_CALIBRATION_O2_BINS, o2CalibrationTable.axis);
+    EEPROM.put(EEPROM_CALIBRATION_O2_VALUES, o2CalibrationTable.values);
   }
   else if(pageNum == IAT_CALIBRATION_PAGE)
   {
-    EEPROM.put(EEPROM_CALIBRATION_IAT_BINS, iatCalibration_bins);
-    EEPROM.put(EEPROM_CALIBRATION_IAT_VALUES, iatCalibration_values);
+    EEPROM.put(EEPROM_CALIBRATION_IAT_BINS, iatCalibrationTable.axis);
+    EEPROM.put(EEPROM_CALIBRATION_IAT_VALUES, iatCalibrationTable.values);
   }
   else if(pageNum == CLT_CALIBRATION_PAGE)
   {
-    EEPROM.put(EEPROM_CALIBRATION_CLT_BINS, cltCalibration_bins);
-    EEPROM.put(EEPROM_CALIBRATION_CLT_VALUES, cltCalibration_values);
+    EEPROM.put(EEPROM_CALIBRATION_CLT_BINS, cltCalibrationTable.axis);
+    EEPROM.put(EEPROM_CALIBRATION_CLT_VALUES, cltCalibrationTable.values);
   }
 }
 

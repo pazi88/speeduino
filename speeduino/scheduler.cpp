@@ -29,6 +29,8 @@ A full copy of the license may be found in the projects root directory
 #include "scheduledIO.h"
 #include "timers.h"
 #include "schedule_calcs.h"
+#include "utilities.h"
+#include "units.h"
 
 FuelSchedule fuelSchedule1(FUEL1_COUNTER, FUEL1_COMPARE, FUEL1_TIMER_DISABLE, FUEL1_TIMER_ENABLE);
 FuelSchedule fuelSchedule2(FUEL2_COUNTER, FUEL2_COMPARE, FUEL2_TIMER_DISABLE, FUEL2_TIMER_ENABLE);
@@ -282,13 +284,15 @@ void refreshIgnitionSchedule1(unsigned long timeToEnd)
   }
 }
 
+static table2D_u8_u8_4 PrimingPulseTable(&configPage2.primeBins, &configPage2.primePulse);
+
 /** Perform the injector priming pulses.
  * Set these to run at an arbitrary time in the future (100us).
  * The prime pulse value is in ms*10, so need to multiple by 100 to get to uS
  */
 extern void beginInjectorPriming(void)
 {
-  unsigned long primingValue = table2D_getValue(&PrimingPulseTable, currentStatus.coolant + CALIBRATION_TEMPERATURE_OFFSET);
+  unsigned long primingValue = table2D_getValue(&PrimingPulseTable, temperatureAddOffset(currentStatus.coolant));
   if( (primingValue > 0) && (currentStatus.TPS <= configPage4.floodClear) )
   {
     primingValue = primingValue * 100 * 5; //to achieve long enough priming pulses, the values in tuner studio are divided by 0.5 instead of 0.1, so multiplier of 5 is required.
@@ -359,7 +363,7 @@ static inline __attribute__((always_inline)) void fuelScheduleISR(FuelSchedule &
 * - endCallback - change scheduler into OFF state (or PENDING if schedule.hasNextSchedule is set)
 */
 //Timer3A (fuel schedule 1) Compare Vector
-#if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__) || defined(__AVR_ATmega2561__) //AVR chips use the ISR for this
+#ifdef CORE_AVR //AVR chips use the ISR for this
 //fuelSchedules 1 and 5
 ISR(TIMER3_COMPA_vect) //cppcheck-suppress misra-c2012-8.2
 #else
@@ -370,7 +374,7 @@ void fuelSchedule1Interrupt() //Most ARM chips can simply call a function
   }
 
 
-#if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__) || defined(__AVR_ATmega2561__) //AVR chips use the ISR for this
+#ifdef CORE_AVR
 ISR(TIMER3_COMPB_vect) //cppcheck-suppress misra-c2012-8.2
 #else
 void fuelSchedule2Interrupt() //Most ARM chips can simply call a function
@@ -380,7 +384,7 @@ void fuelSchedule2Interrupt() //Most ARM chips can simply call a function
   }
 
 
-#if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__) || defined(__AVR_ATmega2561__) //AVR chips use the ISR for this
+#ifdef CORE_AVR
 ISR(TIMER3_COMPC_vect) //cppcheck-suppress misra-c2012-8.2
 #else
 void fuelSchedule3Interrupt() //Most ARM chips can simply call a function
@@ -390,7 +394,7 @@ void fuelSchedule3Interrupt() //Most ARM chips can simply call a function
   }
 
 
-#if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__) || defined(__AVR_ATmega2561__) //AVR chips use the ISR for this
+#ifdef CORE_AVR
 ISR(TIMER4_COMPB_vect) //cppcheck-suppress misra-c2012-8.2
 #else
 void fuelSchedule4Interrupt() //Most ARM chips can simply call a function
@@ -478,7 +482,7 @@ static inline __attribute__((always_inline)) void ignitionScheduleISR(IgnitionSc
   }
   else if (schedule.Status == OFF)
   {
-    //Catch any spurious interrupts. This really shouldn't ever be called, but there as a safety
+    //This occurs after a hard cut is active to prevent the future schedules from ever being run
     schedule.pTimerDisable(); 
   }
 }
@@ -569,81 +573,120 @@ void ignitionSchedule8Interrupt(void) //Most ARM chips can simply call a functio
   }
 #endif
 
-void disablePendingFuelSchedule(byte channel)
+void disableFuelSchedule(byte channel)
 {
   noInterrupts();
   switch(channel)
   {
     case 0:
       if(fuelSchedule1.Status == PENDING) { fuelSchedule1.Status = OFF; }
+      else if(fuelSchedule1.Status == RUNNING) { fuelSchedule1.hasNextSchedule = false; }
       break;
     case 1:
       if(fuelSchedule2.Status == PENDING) { fuelSchedule2.Status = OFF; }
+      else if(fuelSchedule2.Status == RUNNING) { fuelSchedule2.hasNextSchedule = false; }
       break;
     case 2: 
       if(fuelSchedule3.Status == PENDING) { fuelSchedule3.Status = OFF; }
+      else if(fuelSchedule3.Status == RUNNING) { fuelSchedule3.hasNextSchedule = false; }
       break;
     case 3:
       if(fuelSchedule4.Status == PENDING) { fuelSchedule4.Status = OFF; }
+      else if(fuelSchedule4.Status == RUNNING) { fuelSchedule4.hasNextSchedule = false; }
       break;
     case 4:
 #if (INJ_CHANNELS >= 5)
       if(fuelSchedule5.Status == PENDING) { fuelSchedule5.Status = OFF; }
+      else if(fuelSchedule5.Status == RUNNING) { fuelSchedule5.hasNextSchedule = false; }
 #endif
       break;
     case 5:
 #if (INJ_CHANNELS >= 6)
       if(fuelSchedule6.Status == PENDING) { fuelSchedule6.Status = OFF; }
+      else if(fuelSchedule6.Status == RUNNING) { fuelSchedule6.hasNextSchedule = false; }
 #endif
       break;
     case 6:
 #if (INJ_CHANNELS >= 7)
       if(fuelSchedule7.Status == PENDING) { fuelSchedule7.Status = OFF; }
+      else if(fuelSchedule7.Status == RUNNING) { fuelSchedule7.hasNextSchedule = false; }
 #endif
       break;
     case 7:
 #if (INJ_CHANNELS >= 8)
       if(fuelSchedule8.Status == PENDING) { fuelSchedule8.Status = OFF; }
+      else if(fuelSchedule8.Status == RUNNING) { fuelSchedule8.hasNextSchedule = false; }
 #endif
       break;
   }
   interrupts();
 }
-void disablePendingIgnSchedule(byte channel)
+void disableIgnSchedule(byte channel)
 {
   noInterrupts();
   switch(channel)
   {
     case 0:
       if(ignitionSchedule1.Status == PENDING) { ignitionSchedule1.Status = OFF; }
+      else if(ignitionSchedule1.Status == RUNNING) { ignitionSchedule1.hasNextSchedule = false; }
       break;
     case 1:
       if(ignitionSchedule2.Status == PENDING) { ignitionSchedule2.Status = OFF; }
+      else if(ignitionSchedule2.Status == RUNNING) { ignitionSchedule2.hasNextSchedule = false; }
       break;
     case 2: 
       if(ignitionSchedule3.Status == PENDING) { ignitionSchedule3.Status = OFF; }
+      else if(ignitionSchedule3.Status == RUNNING) { ignitionSchedule3.hasNextSchedule = false; }
       break;
     case 3:
       if(ignitionSchedule4.Status == PENDING) { ignitionSchedule4.Status = OFF; }
+      else if(ignitionSchedule4.Status == RUNNING) { ignitionSchedule4.hasNextSchedule = false; }
       break;
     case 4:
       if(ignitionSchedule5.Status == PENDING) { ignitionSchedule5.Status = OFF; }
+      else if(ignitionSchedule5.Status == RUNNING) { ignitionSchedule5.hasNextSchedule = false; }
       break;
 #if IGN_CHANNELS >= 6      
-    case 6:
+    case 5:
       if(ignitionSchedule6.Status == PENDING) { ignitionSchedule6.Status = OFF; }
+      else if(ignitionSchedule6.Status == RUNNING) { ignitionSchedule6.hasNextSchedule = false; }
       break;
 #endif
 #if IGN_CHANNELS >= 7      
-    case 7:
+    case 6:
       if(ignitionSchedule7.Status == PENDING) { ignitionSchedule7.Status = OFF; }
+      else if(ignitionSchedule7.Status == RUNNING) { ignitionSchedule7.hasNextSchedule = false; }
       break;
 #endif
 #if IGN_CHANNELS >= 8      
-    case 8:
+    case 7:
       if(ignitionSchedule8.Status == PENDING) { ignitionSchedule8.Status = OFF; }
+      else if(ignitionSchedule8.Status == RUNNING) { ignitionSchedule8.hasNextSchedule = false; }
       break;
 #endif
   }
   interrupts();
+}
+
+void disableAllFuelSchedules()
+{
+  disableFuelSchedule(0);
+  disableFuelSchedule(1);
+  disableFuelSchedule(2);
+  disableFuelSchedule(3);
+  disableFuelSchedule(4);
+  disableFuelSchedule(5);
+  disableFuelSchedule(6);
+  disableFuelSchedule(7);
+}
+void disableAllIgnSchedules()
+{
+  disableIgnSchedule(0);
+  disableIgnSchedule(1);
+  disableIgnSchedule(2);
+  disableIgnSchedule(3);
+  disableIgnSchedule(4);
+  disableIgnSchedule(5);
+  disableIgnSchedule(6);
+  disableIgnSchedule(7);
 }

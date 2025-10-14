@@ -3,6 +3,7 @@
 #include "board_avr2560.h"
 #include "auxiliaries.h"
 #include "comms_secondary.h"
+#include "idle.h"
 
 // Prescaler values for timers 1-3-4-5. Refer to www.instructables.com/files/orig/F3T/TIKL/H3WSA4V7/F3TTIKLH3WSA4V7.jpg
 #define TIMER_PRESCALER_OFF  ((0<<CS12)|(0<<CS11)|(0<<CS10))
@@ -24,9 +25,7 @@ void initBoard(void)
     * General
     */
     configPage9.intcan_available = 0;   // AVR devices do NOT have internal canbus
-    #ifdef secondarySerial_AVAILABLE
-      pSecondarySerial = &Serial3;
-    #endif
+    pSecondarySerial = &Serial3;
 
     /*
     ***********************************************************************************************************
@@ -41,7 +40,10 @@ void initBoard(void)
 
     boost_pwm_max_count = (uint16_t)(MICROS_PER_SEC / (16U * configPage6.boostFreq * 2U)); //Converts the frequency in Hz to the number of ticks (at 16uS) it takes to complete 1 cycle. The x2 is there because the frequency is stored at half value (in a byte) to allow frequencies up to 511Hz
     vvt_pwm_max_count = (uint16_t)(MICROS_PER_SEC / (16U * configPage6.vvtFreq * 2U)); //Converts the frequency in Hz to the number of ticks (at 16uS) it takes to complete 1 cycle
-    // put idle_pwm_max_count calculation here?
+    if ((configPage6.iacAlgorithm == IAC_ALGORITHM_PWM_OL) || (configPage6.iacAlgorithm == IAC_ALGORITHM_PWM_CL) || (configPage6.iacAlgorithm == IAC_ALGORITHM_PWM_OLCL))
+    {
+      idle_pwm_max_count = (uint16_t)(MICROS_PER_SEC / (16U * configPage6.idleFreq * 2U)); //Converts the frequency in Hz to the number of ticks (at 16uS) it takes to complete 1 cycle. Note that the frequency is divided by 2 coming from TS to allow for up to 512hz
+    }
 
     /*
     ***********************************************************************************************************
@@ -131,5 +133,11 @@ static inline unsigned long micros_safe(void)
   return newMicros;
 } 
 #endif //TIMER5_MICROS
+
+uint8_t getSystemTemp()
+{
+  //AVR2560 has no internal temperature monitoring, just return 0. 
+  return 0;
+}
 
 #endif //CORE_AVR

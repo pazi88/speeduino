@@ -5,8 +5,7 @@
 #include "idle.h"
 #include "../test_utils.h"
 #include "sensors.h"
-
-extern void construct2dTables(void);
+#include "units.h"
 
 extern int8_t correctionFixedTiming(int8_t advance);
 
@@ -32,9 +31,9 @@ static void test_correctionFixedTiming(void) {
 }
 
 extern int8_t correctionCLTadvance(int8_t advance);
+extern table2D_u8_u8_6 CLTAdvanceTable; ///< 6 bin ignition adjustment based on coolant temperature  (2D)
 
 static void setup_clt_advance_table(void) {
-  construct2dTables();
   initialiseCorrections();
   TEST_DATA_P uint8_t bins[] = { 60, 70, 80, 90, 100, 110 };
   TEST_DATA_P uint8_t values[] = { 30, 25, 20, 15, 10, 5 };
@@ -44,13 +43,13 @@ static void setup_clt_advance_table(void) {
 static void test_correctionCLTadvance_lookup(void) {
     setup_clt_advance_table();
 
-    currentStatus.coolant = 105 - CALIBRATION_TEMPERATURE_OFFSET;
+    currentStatus.coolant = temperatureRemoveOffset(105);
     TEST_ASSERT_EQUAL(8 + 8 - 15, correctionCLTadvance(8));
 
-    currentStatus.coolant = 65 - CALIBRATION_TEMPERATURE_OFFSET;
+    currentStatus.coolant = temperatureRemoveOffset(65);
     TEST_ASSERT_EQUAL(1 + 28 - 15, correctionCLTadvance(1));
 
-    currentStatus.coolant = 105 - CALIBRATION_TEMPERATURE_OFFSET;
+    currentStatus.coolant = temperatureRemoveOffset(105);
     TEST_ASSERT_EQUAL(-3 + 8 - 15, correctionCLTadvance(-3));
 }
 
@@ -86,7 +85,7 @@ static void test_correctionCrankingFixedTiming_crank_coolant(void) {
     
     configPage4.CrankAng = 8;
 
-    currentStatus.coolant = 65 - CALIBRATION_TEMPERATURE_OFFSET;
+    currentStatus.coolant = temperatureRemoveOffset(65);
     TEST_ASSERT_EQUAL(1 + 28 - 15, correctionCLTadvance(1));
 }
 
@@ -97,9 +96,9 @@ static void test_correctionCrankingFixedTiming(void) {
 }
 
 extern int8_t correctionFlexTiming(int8_t advance);
+extern table2D_u8_u8_6 flexAdvTable;   ///< 6 bin flex fuel correction table for timing advance (2D)
 
 static void setup_flexAdv(void) {
-  construct2dTables();
   initialiseCorrections();
   TEST_DATA_P uint8_t bins[] = { 30, 40, 50, 60, 70, 80 };
   TEST_DATA_P uint8_t values[] = { 30, 25, 20, 15, 10, 5 };
@@ -134,9 +133,9 @@ static void test_correctionFlexTiming(void) {
 }
 
 extern int8_t correctionWMITiming(int8_t advance);
+extern table2D_u8_u8_6 wmiAdvTable; //6 bin wmi correction table for timing advance (2D)
 
 static void setup_WMIAdv(void) {
-    construct2dTables();
     initialiseCorrections();
 
     configPage10.wmiEnabled= 1;
@@ -149,7 +148,7 @@ static void setup_WMIAdv(void) {
     configPage10.wmiMAP = 35;
     currentStatus.MAP = (configPage10.wmiMAP*2L)+1L;
     configPage10.wmiIAT = 155;
-    currentStatus.IAT = configPage10.wmiIAT - CALIBRATION_TEMPERATURE_OFFSET + 1;
+    currentStatus.IAT = temperatureRemoveOffset(configPage10.wmiIAT) + 1;
 
     TEST_DATA_P uint8_t bins[] = { 30, 40, 50, 60, 70, 80 };
     TEST_DATA_P uint8_t values[] = { 30, 25, 20, 15, 10, 5 };
@@ -217,7 +216,7 @@ static void test_correctionWMITiming_maplow_inactive(void) {
     
 static void test_correctionWMITiming_iatlow_inactive(void) {
     setup_WMIAdv();
-    currentStatus.IAT = configPage10.wmiIAT - CALIBRATION_TEMPERATURE_OFFSET - 1;
+    currentStatus.IAT = temperatureRemoveOffset(configPage10.wmiIAT) - 1;
 
     TEST_ASSERT_EQUAL(8, correctionWMITiming(8));
     TEST_ASSERT_EQUAL(-3, correctionWMITiming(-3));
@@ -236,9 +235,9 @@ static void test_correctionWMITiming(void) {
 }
 
 extern int8_t correctionIATretard(int8_t advance);
+extern table2D_u8_u8_6 IATRetardTable; ///< 6 bin ignition adjustment based on inlet air temperature  (2D)
 
 static void setup_IATRetard(void) {
-  construct2dTables();
   initialiseCorrections();
 
   TEST_DATA_P uint8_t bins[] = { 30, 40, 50, 60, 70, 80 };
@@ -274,8 +273,9 @@ static void setup_idleadv_ctps(void) {
     currentStatus.CTPSActive = 1;
 }
 
+extern table2D_u8_u8_6 idleAdvanceTable; ///< 6 bin idle advance adjustment table based on RPM difference  (2D)
+
 static void setup_correctionIdleAdvance(void) {
-    construct2dTables();
     initialiseCorrections();
 
     TEST_DATA_P uint8_t bins[] = { 30, 40, 50, 60, 70, 80 };
@@ -412,7 +412,6 @@ static void test_correctionIdleAdvance(void) {
 extern int8_t correctionSoftRevLimit(int8_t advance);
 
 static void setup_correctionSoftRevLimit(void) {
-    construct2dTables();
     initialiseCorrections();
 
     configPage6.engineProtectType = PROTECT_CUT_IGN;
@@ -764,8 +763,9 @@ static void test_correctionKnock_disabled_knockactive(void) {
 static void test_correctionKnock(void) {
 }
 
+extern table2D_u8_u8_6 dwellVCorrectionTable; ///< 6 bin dwell voltage correction (2D)
+
 static void setup_correctionsDwell(void) {
-    construct2dTables();
     initialiseCorrections();
     
     configPage4.sparkDur = 10;

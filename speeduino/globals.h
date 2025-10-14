@@ -25,11 +25,19 @@
 #ifndef GLOBALS_H
 #define GLOBALS_H
 #include <Arduino.h>
-#include <SimplyAtomic.h>
 #include "table2d.h"
 #include "table3d.h"
 #include "statuses.h"
 #include "config_pages.h"
+
+#if __has_include(<SimplyAtomic.h>)
+  #include <SimplyAtomic.h>
+#else
+  //Fallback for Arduino IDE when SimplyAtomic is not installed. Only works for AVR
+  #include <util/atomic.h>
+  #define ATOMIC() ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
+  #warning It is strongly recommended to install the SimplyAtomic library rather than relying on the built-in ATOMIC
+#endif 
 
 #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__) || defined(__AVR_ATmega2561__)
   #define BOARD_MAX_DIGITAL_PINS 54 //digital pins +1
@@ -46,21 +54,6 @@
   #ifndef IGN_CHANNELS
     #define IGN_CHANNELS 5
   #endif
-
-  #if defined(__AVR_ATmega2561__)
-    //This is a workaround to avoid having to change all the references to higher ADC channels. We simply define the channels (Which don't exist on the 2561) as being the same as A0-A7
-    //These Analog inputs should never be used on any 2561 board definition (Because they don't exist on the MCU), so it will not cause any issues
-    #define A8  A0
-    #define A9  A1
-    #define A10  A2
-    #define A11  A3
-    #define A12  A4
-    #define A13  A5
-    #define A14  A6
-    #define A15  A7
-  #endif
-
-  //#define TIMER5_MICROS
 
 #elif defined(CORE_TEENSY)
   #if defined(__MK64FX512__) || defined(__MK66FX1M0__)
@@ -91,10 +84,6 @@
   #define CORE_SAM
   #define INJ_CHANNELS 4
   #define IGN_CHANNELS 4
-#elif defined(__SAMC21J18A__)
-  #define BOARD_H "board_samc21.h"
-  #define CORE_SAMC21
-  #define CORE_SAM
 #elif defined(__SAME51J19A__)
   #define BOARD_H "board_same51.h"
   #define CORE_SAME51
@@ -115,6 +104,8 @@
 #define MICROS_PER_SEC INT32_C(1000000)
 #define MICROS_PER_MIN INT32_C(MICROS_PER_SEC*60U)
 #define MICROS_PER_HOUR INT32_C(MICROS_PER_MIN*60U)
+
+#define UINT16_HALF_RANGE     0x8000
 
 #define SERIAL_PORT_PRIMARY   0
 #define SERIAL_PORT_SECONDARY 3
@@ -170,8 +161,7 @@ static_assert(TOOTH_LOG_SIZE<UINT8_MAX, "Check all uses of TOOTH_LOG_SIZE");
 #define IGN8_CMD_BIT      7
 
 #define CALIBRATION_TABLE_SIZE 512 ///< Calibration table size for CLT, IAT, O2
-#define CALIBRATION_TEMPERATURE_OFFSET 40 /**< All temperature measurements are stored offset by 40 degrees.
-This is so we can use an unsigned byte (0-255) to represent temperature ranges from -40 to 215 */
+
 #define OFFSET_FUELTRIM 127U ///< The fuel trim tables are offset by 128 to allow for -128 to +128 values
 #define OFFSET_IGNITION 40 ///< Ignition values from the main spark table are offset 40 degrees downwards to allow for negative spark timing
 
@@ -219,34 +209,6 @@ extern trimTable3d trim7Table; //6x6 Fuel trim 7 map
 extern trimTable3d trim8Table; //6x6 Fuel trim 8 map
 
 extern struct table3d4RpmLoad dwellTable; //4x4 Dwell map
-extern struct table2D taeTable; //4 bin TPS Acceleration Enrichment map (2D)
-extern struct table2D maeTable;
-extern struct table2D WUETable; //10 bin Warm Up Enrichment map (2D)
-extern struct table2D ASETable; //4 bin After Start Enrichment map (2D)
-extern struct table2D ASECountTable; //4 bin After Start duration map (2D)
-extern struct table2D PrimingPulseTable; //4 bin Priming pulsewidth map (2D)
-extern struct table2D crankingEnrichTable; //4 bin cranking Enrichment map (2D)
-extern struct table2D dwellVCorrectionTable; //6 bin dwell voltage correction (2D)
-extern struct table2D injectorVCorrectionTable; //6 bin injector voltage correction (2D)
-extern struct table2D injectorAngleTable; //4 bin injector timing curve (2D)
-extern struct table2D IATDensityCorrectionTable; //9 bin inlet air temperature density correction (2D)
-extern struct table2D baroFuelTable; //8 bin baro correction curve (2D)
-extern struct table2D IATRetardTable; //6 bin ignition adjustment based on inlet air temperature  (2D)
-extern struct table2D idleTargetTable; //10 bin idle target table for idle timing (2D)
-extern struct table2D idleAdvanceTable; //6 bin idle advance adjustment table based on RPM difference  (2D)
-extern struct table2D CLTAdvanceTable; //6 bin ignition adjustment based on coolant temperature  (2D)
-extern struct table2D rotarySplitTable; //8 bin ignition split curve for rotary leading/trailing  (2D)
-extern struct table2D flexFuelTable;  //6 bin flex fuel correction table for fuel adjustments (2D)
-extern struct table2D flexAdvTable;   //6 bin flex fuel correction table for timing advance (2D)
-extern struct table2D flexBoostTable; //6 bin flex fuel correction table for boost adjustments (2D)
-extern struct table2D fuelTempTable;  //6 bin fuel temperature correction table for fuel adjustments (2D)
-extern struct table2D knockWindowStartTable;
-extern struct table2D knockWindowDurationTable;
-extern struct table2D oilPressureProtectTable;
-extern struct table2D wmiAdvTable; //6 bin wmi correction table for timing advance (2D)
-extern struct table2D coolantProtectTable; //6 bin coolant temperature protection table for engine protection (2D)
-extern struct table2D fanPWMTable;
-extern struct table2D rollingCutTable;
 
 //These are for the direct port manipulation of the injectors, coils and aux outputs
 extern volatile PORT_TYPE *inj1_pin_port;
@@ -435,19 +397,6 @@ extern struct config9 configPage9;
 extern struct config10 configPage10;
 extern struct config13 configPage13;
 extern struct config15 configPage15;
-//extern byte cltCalibrationTable[CALIBRATION_TABLE_SIZE]; /**< An array containing the coolant sensor calibration values */
-//extern byte iatCalibrationTable[CALIBRATION_TABLE_SIZE]; /**< An array containing the inlet air temperature sensor calibration values */
-//extern byte o2CalibrationTable[CALIBRATION_TABLE_SIZE]; /**< An array containing the O2 sensor calibration values */
-
-extern uint16_t cltCalibration_bins[32];
-extern uint16_t cltCalibration_values[32];
-extern uint16_t iatCalibration_bins[32];
-extern uint16_t iatCalibration_values[32];
-extern uint16_t o2Calibration_bins[32];
-extern uint8_t  o2Calibration_values[32]; // Note 8-bit values
-extern struct table2D cltCalibrationTable; /**< A 32 bin array containing the coolant temperature sensor calibration values */
-extern struct table2D iatCalibrationTable; /**< A 32 bin array containing the inlet air temperature sensor calibration values */
-extern struct table2D o2CalibrationTable; /**< A 32 bin array containing the O2 sensor calibration values */
 
 bool pinIsOutput(byte pin);
 bool pinIsUsed(byte pin);

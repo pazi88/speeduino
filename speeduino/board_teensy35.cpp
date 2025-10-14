@@ -7,6 +7,7 @@
 #include "scheduler.h"
 #include "timers.h"
 #include "comms_secondary.h"
+#include <InternalTemperature.h>
 
 /*
   //These are declared locally in comms_CAN now due to this issue: https://github.com/tonton81/FlexCAN_T4/issues/67
@@ -89,6 +90,8 @@ void initBoard()
 
         //Enable IRQ Interrupt
         NVIC_ENABLE_IRQ(IRQ_FTM2);
+
+        idle_pwm_max_count = (uint16_t)(MICROS_PER_SEC / (32U * configPage6.idleFreq * 2U)); //Converts the frequency in Hz to the number of ticks (at 32uS) it takes to complete 1 cycle. Note that the frequency is divided by 2 coming from TS to allow for up to 512hz
     }
 
     /*
@@ -416,5 +419,10 @@ time_t getTeensy3Time()
 
 void doSystemReset() { return; }
 void jumpToBootloader() { return; }
+
+uint8_t getSystemTemp()
+{
+  return trunc(InternalTemperature.readTemperatureC());
+}
 
 #endif

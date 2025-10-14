@@ -8,8 +8,16 @@
 #pragma once
 
 #include <stdint.h>
-#include <SimplyAtomic.h>
 #include "bit_manip.h"
+
+#if __has_include(<SimplyAtomic.h>)
+  #include <SimplyAtomic.h>
+#else 
+  //Fallback for Arduino IDE when SimplyAtomic is not installed
+  #include <util/atomic.h>
+  #define ATOMIC() ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
+  #warning It is strongly recommended to install the SimplyAtomic library rather than relying on the built-in ATOMIC
+#endif
 
 using byte = uint8_t;
 
@@ -49,9 +57,7 @@ using byte = uint8_t;
 #define BIT_STATUS3_FUEL2_ACTIVE  2
 #define BIT_STATUS3_VSS_REFRESH   3
 #define BIT_STATUS3_HALFSYNC      4 //shows if there is only sync from primary trigger, but not from secondary.
-#define BIT_STATUS3_NSQUIRTS1     5
-#define BIT_STATUS3_UNUSED1       6
-#define BIT_STATUS3_UNUSED2       7
+#define BIT_STATUS3_NSQUIRTS1     5 // Uses bits 5-7
 
 // Bit masks for statuses::status4
 #define BIT_STATUS4_WMI_EMPTY     0 //Indicates whether the WMI tank is empty
@@ -69,7 +75,7 @@ using byte = uint8_t;
 #define BIT_STATUS5_SPARK2_ACTIVE  2
 #define BIT_STATUS5_KNOCK_ACTIVE   3
 #define BIT_STATUS5_KNOCK_PULSE    4
-#define BIT_STATUS5_UNUSED6        5
+#define BIT_STATUS5_CLUTCH_PRESS   5
 #define BIT_STATUS5_UNUSED7        6
 #define BIT_STATUS5_UNUSED8        7
 
@@ -119,7 +125,7 @@ struct statuses {
   long longRPM;   ///< RPM as long int (gets assigned to / maintained in statuses.RPM as well)
   uint16_t baroADC;
   long MAP;     ///< Manifold absolute pressure. Has to be a long for PID calcs (Boost control)
-  int16_t EMAP; ///< EMAP ... (See @ref config6.useEMAP for EMAP enablement)
+  uint16_t EMAP; ///< EMAP ... (See @ref config6.useEMAP for EMAP enablement)
   uint8_t baro;   ///< Barometric pressure is simply the initial MAP reading, taken before the engine is running. Alternatively, can be taken from an external sensor
   uint8_t TPS;    /**< The current TPS reading (0% - 100%). Is the tpsADC value after the calibration is applied */
   uint8_t tpsADC; /**< byte (valued: 0-255) representation of the TPS. Downsampled from the original 10-bit (0-1023) reading, but before any calibration is applied */
@@ -198,8 +204,8 @@ struct statuses {
   byte nitrous_status;
   byte nSquirts;  ///< Number of injector squirts per cycle (per injector)
   byte nChannels; /**< Number of fuel and ignition channels.  */
-  int16_t fuelLoad;
-  int16_t ignLoad;
+  uint16_t fuelLoad;
+  uint16_t ignLoad;
   bool fuelPumpOn; /**< Indicator showing the current status of the fuel pump */
   volatile byte syncLossCounter;
   byte knockRetard;
@@ -225,6 +231,7 @@ struct statuses {
   byte outputsStatus;
   byte TS_SD_Status; //TunerStudios SD card status
   byte airConStatus;
+  uint8_t systemTemp;
 };
 
 /**

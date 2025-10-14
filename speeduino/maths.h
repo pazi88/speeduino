@@ -2,7 +2,6 @@
 #define MATH_H
 
 #include <stdint.h>
-#include "globals.h"
 #include "bit_shifts.h"
 
 #ifdef USE_LIBDIVIDE
@@ -92,6 +91,21 @@ uint8_t random1to100(void);
  */
 #define UDIV_ROUND_CLOSEST(n, d, t) ((t)((n) + DIV_ROUND_CORRECT(d, t))/(t)(d))
 
+/**
+ * @brief Rounded \em unsigned integer division optimized for compile time constants
+ * 
+ * @tparam divisor Divisor
+ * @param n Dividend
+ * @return uint16_t 
+ */
+template <uint16_t divisor>
+static inline constexpr uint16_t div_round_closest_u16(uint16_t n) {
+    // This is a compile time version of UDIV_ROUND_CLOSEST
+    //
+    // As of avr-gcc 5.4.0, the compiler will optimize this to a multiply/shift
+    // assuming d is a constant.    
+    return (uint16_t)((n + DIV_ROUND_CORRECT(divisor, uint16_t)) / divisor);
+}
 ///@}
 
 /** @brief Test whether the parameter is an integer or not. */
@@ -215,7 +229,7 @@ static inline int16_t nudge(int16_t min, int16_t max, int16_t value, int16_t nud
     return value;
 }
 
-#if defined(CORE_AVR) || defined(ARDUINO_ARCH_AVR)
+#if defined(__AVR__)
 
 static inline bool udiv_is16bit_result(uint32_t dividend, uint16_t divisor) {
   return divisor>(uint16_t)(dividend>>16U);
@@ -239,7 +253,7 @@ static inline bool udiv_is16bit_result(uint32_t dividend, uint16_t divisor) {
  */
 static inline uint16_t udiv_32_16 (uint32_t dividend, uint16_t divisor)
 {
-#if defined(CORE_AVR) || defined(ARDUINO_ARCH_AVR)
+#if defined(__AVR__)
 
     if (divisor==0U || !udiv_is16bit_result(dividend, divisor)) { return UINT16_MAX; }
 
@@ -286,7 +300,7 @@ static inline uint16_t udiv_32_16 (uint32_t dividend, uint16_t divisor)
  **/
 static inline uint16_t udiv_32_16_closest(uint32_t dividend, uint16_t divisor)
 {
-#if defined(CORE_AVR) || defined(ARDUINO_ARCH_AVR)
+#if defined(__AVR__)
     dividend = dividend + (uint32_t)(DIV_ROUND_CORRECT(divisor, uint16_t));
     return udiv_32_16(dividend, divisor);
 #else
@@ -343,6 +357,44 @@ static inline uint16_t LOW_PASS_FILTER(uint16_t input, uint8_t alpha, uint16_t p
 /** @brief Simple low pass IIR filter for S16 values */
 static inline int16_t LOW_PASS_FILTER(int16_t input, uint8_t alpha, int16_t prior) {
     return LOW_PASS_FILTER_8BIT<int16_t, int32_t>(input, alpha, prior);
+}
+
+/**
+ * @brief Scale a value from one range to another.
+ * 
+ * Takes a value from a range of [0, fromRange] and scales it to a range of [0, toRange].
+ * @warning from must be within the range [0, fromRange].
+ * 
+ * @param from Value to scale [0, fromRange]
+ * @param fromRange Zero based range of the from value
+ * @param toRange Zero based range of the to value
+ * @return uint8_t from scaled to toRange
+ */
+static inline uint8_t scale(const uint8_t from, const uint8_t fromRange, const uint8_t toRange) {
+  // Using uint16_t to avoid overflow when calculating the result
+  return (((uint16_t)from * (uint16_t)toRange) / (uint16_t)fromRange);
+}
+
+/**
+ * @brief Specialist version of map(long, long, long, long, long) for performance.
+ * 
+ * Maps a value from one range to another. 
+ * @warning from must be within the range [fromLow, fromHigh].
+ * 
+ * @param from Value to map [fromLow, fromHigh]
+ * @param fromLow Lower bound of the from range
+ * @param fromHigh Upper bound of the from range
+ * @param toLow Lower bound of the to range
+ * @param toHigh Upper bound of the to range
+ * @return uint8_t Mapped value in the new range [toLow, toHigh]
+ */
+static inline uint8_t fast_map(const uint8_t from, const uint8_t fromLow, const uint8_t fromHigh, const uint8_t toLow, const uint8_t toHigh) {
+  // Stick to unsigned math for performance, so need to check for output range inversion
+  if (toLow>toHigh) {
+    return toLow - scale(from - fromLow, fromHigh - fromLow, toLow-toHigh);
+  } else {
+    return scale(from - fromLow, fromHigh - fromLow, toHigh-toLow) + toLow;
+  }
 }
 
 #endif

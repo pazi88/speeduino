@@ -5,6 +5,7 @@
 #include "maths.h"
 #include "utilities.h"
 #include BOARD_H 
+#include "units.h"
 
 /** 
  * Returns a numbered byte-field (partial field in case of multi-byte fields) from "current status" structure in the format expected by TunerStudio
@@ -28,8 +29,8 @@ byte getTSLogEntry(uint16_t byteNum)
     case 3: statusValue = currentStatus.syncLossCounter; break;
     case 4: statusValue = lowByte(currentStatus.MAP); break; //2 bytes for MAP
     case 5: statusValue = highByte(currentStatus.MAP); break;
-    case 6: statusValue = lowByte(currentStatus.IAT + CALIBRATION_TEMPERATURE_OFFSET); break; //mat
-    case 7: statusValue = lowByte(currentStatus.coolant + CALIBRATION_TEMPERATURE_OFFSET); break; //Coolant ADC
+    case 6: statusValue = lowByte(temperatureAddOffset(currentStatus.IAT)); break; //mat
+    case 7: statusValue = lowByte(temperatureAddOffset(currentStatus.coolant)); break; //Coolant ADC
     case 8: statusValue = currentStatus.batCorrection; break; //Battery voltage correction (%)
     case 9: statusValue = currentStatus.battery10; break; //battery voltage
     case 10: statusValue = currentStatus.O2; break; //O2
@@ -119,14 +120,14 @@ byte getTSLogEntry(uint16_t byteNum)
     case 74: statusValue = currentStatus.tpsADC; break;
     case 75: statusValue = 0U /*getNextError()*/; break;
 
-    case 76: statusValue = lowByte(currentStatus.PW1); break; //Pulsewidth 1 multiplied by 10 in ms. Have to convert from uS to mS.
-    case 77: statusValue = highByte(currentStatus.PW1); break; //Pulsewidth 1 multiplied by 10 in ms. Have to convert from uS to mS.
-    case 78: statusValue = lowByte(currentStatus.PW2); break; //Pulsewidth 2 multiplied by 10 in ms. Have to convert from uS to mS.
-    case 79: statusValue = highByte(currentStatus.PW2); break; //Pulsewidth 2 multiplied by 10 in ms. Have to convert from uS to mS.
-    case 80: statusValue = lowByte(currentStatus.PW3); break; //Pulsewidth 3 multiplied by 10 in ms. Have to convert from uS to mS.
-    case 81: statusValue = highByte(currentStatus.PW3); break; //Pulsewidth 3 multiplied by 10 in ms. Have to convert from uS to mS.
-    case 82: statusValue = lowByte(currentStatus.PW4); break; //Pulsewidth 4 multiplied by 10 in ms. Have to convert from uS to mS.
-    case 83: statusValue = highByte(currentStatus.PW4); break; //Pulsewidth 4 multiplied by 10 in ms. Have to convert from uS to mS.
+    case 76: statusValue = lowByte(currentStatus.PW1); break;
+    case 77: statusValue = highByte(currentStatus.PW1); break;
+    case 78: statusValue = lowByte(currentStatus.PW2); break;
+    case 79: statusValue = highByte(currentStatus.PW2); break;
+    case 80: statusValue = lowByte(currentStatus.PW3); break;
+    case 81: statusValue = highByte(currentStatus.PW3); break;
+    case 82: statusValue = lowByte(currentStatus.PW4); break;
+    case 83: statusValue = highByte(currentStatus.PW4); break;
 
     case 84: statusValue = currentStatus.status3; break;
     case 85: statusValue = currentStatus.engineProtectStatus; break;
@@ -160,7 +161,7 @@ byte getTSLogEntry(uint16_t byteNum)
     case 113: statusValue = currentStatus.vvt2TargetAngle; break;
     case 114: statusValue = lowByte(currentStatus.vvt2Duty); break;
     case 115: statusValue = currentStatus.outputsStatus; break;
-    case 116: statusValue = lowByte(currentStatus.fuelTemp + CALIBRATION_TEMPERATURE_OFFSET); break; //Fuel temperature from flex sensor
+    case 116: statusValue = lowByte(temperatureAddOffset(currentStatus.fuelTemp)); break; //Fuel temperature from flex sensor
     case 117: statusValue = currentStatus.fuelTempCorrection; break; //Fuel temperature Correction (%)
     case 118: statusValue = currentStatus.advance1; break; //advance 1 (%)
     case 119: statusValue = currentStatus.advance2; break; //advance 2 (%)
@@ -174,6 +175,17 @@ byte getTSLogEntry(uint16_t byteNum)
     case 127: statusValue = currentStatus.status5; break;
     case 128: statusValue = currentStatus.knockCount; break;
     case 129: statusValue = currentStatus.knockRetard; break;
+
+    case 130: statusValue = lowByte(currentStatus.PW5); break;
+    case 131: statusValue = highByte(currentStatus.PW5); break;
+    case 132: statusValue = lowByte(currentStatus.PW6); break;
+    case 133: statusValue = highByte(currentStatus.PW6); break;
+    case 134: statusValue = lowByte(currentStatus.PW7); break;
+    case 135: statusValue = highByte(currentStatus.PW7); break;
+    case 136: statusValue = lowByte(currentStatus.PW8); break;
+    case 137: statusValue = highByte(currentStatus.PW8); break;
+
+    case 138: statusValue = currentStatus.systemTemp; break;
     default: statusValue = 0; // MISRA check
   }
 
@@ -257,10 +269,10 @@ int16_t getReadableLogEntry(uint16_t logIndex)
     case 51: statusValue = currentStatus.tpsADC; break;
     case 52: statusValue = 0U /*getNextError()*/; break;
 
-    case 53: statusValue = currentStatus.PW1; break; //Pulsewidth 1 multiplied by 10 in ms. Have to convert from uS to mS.
-    case 54: statusValue = currentStatus.PW2; break; //Pulsewidth 2 multiplied by 10 in ms. Have to convert from uS to mS.
-    case 55: statusValue = currentStatus.PW3; break; //Pulsewidth 3 multiplied by 10 in ms. Have to convert from uS to mS.
-    case 56: statusValue = currentStatus.PW4; break; //Pulsewidth 4 multiplied by 10 in ms. Have to convert from uS to mS.
+    case 53: statusValue = currentStatus.PW1; break;
+    case 54: statusValue = currentStatus.PW2; break;
+    case 55: statusValue = currentStatus.PW3; break;
+    case 56: statusValue = currentStatus.PW4; break;
   
     case 57: statusValue = currentStatus.status3; break;
     case 58: statusValue = currentStatus.engineProtectStatus; break;
@@ -301,6 +313,11 @@ int16_t getReadableLogEntry(uint16_t logIndex)
     case 91: statusValue = currentStatus.status5; break;
     case 92: statusValue = currentStatus.knockCount; break;
     case 93: statusValue = currentStatus.knockRetard; break;
+    case 94: statusValue = currentStatus.PW5; break;
+    case 95: statusValue = currentStatus.PW6; break;
+    case 96: statusValue = currentStatus.PW7; break;
+    case 97: statusValue = currentStatus.PW8; break;
+    case 98: statusValue = currentStatus.systemTemp; break;
     default: statusValue = 0; // MISRA check
   }
 
@@ -351,8 +368,8 @@ uint8_t getLegacySecondarySerialLogEntry(uint16_t byteNum)
     case 3: statusValue = (byte)div100(currentStatus.dwell); break; //Dwell in ms * 10
     case 4: statusValue = lowByte(currentStatus.MAP); break; //2 bytes for MAP
     case 5: statusValue = highByte(currentStatus.MAP); break;
-    case 6: statusValue = (byte)(currentStatus.IAT + CALIBRATION_TEMPERATURE_OFFSET); break; //mat
-    case 7: statusValue = (byte)(currentStatus.coolant + CALIBRATION_TEMPERATURE_OFFSET); break; //Coolant ADC
+    case 6: statusValue = (byte)(temperatureAddOffset(currentStatus.IAT)); break; //mat
+    case 7: statusValue = (byte)(temperatureAddOffset(currentStatus.coolant)); break; //Coolant ADC
     case 8: statusValue = currentStatus.batCorrection; break; //Battery voltage correction (%)
     case 9: statusValue = currentStatus.battery10; break; //battery voltage
     case 10: statusValue = currentStatus.O2; break; //O2
@@ -461,7 +478,7 @@ uint8_t getLegacySecondarySerialLogEntry(uint16_t byteNum)
     case 108: statusValue = currentStatus.vvt2TargetAngle; break;
     case 109: statusValue = currentStatus.vvt2Duty; break;
     case 110: statusValue = currentStatus.outputsStatus; break;
-    case 111: statusValue = (byte)(currentStatus.fuelTemp + CALIBRATION_TEMPERATURE_OFFSET); break; //Fuel temperature from flex sensor
+    case 111: statusValue = (byte)temperatureAddOffset(currentStatus.fuelTemp); break; //Fuel temperature from flex sensor
     case 112: statusValue = currentStatus.fuelTempCorrection; break; //Fuel temperature Correction (%)
     case 113: statusValue = currentStatus.VE1; break; //VE 1 (%)
     case 114: statusValue = currentStatus.VE2; break; //VE 2 (%)
@@ -490,7 +507,7 @@ bool is2ByteEntry(uint8_t key)
   // This array indicates which index values from the log are 2 byte values
   // This array MUST remain in ascending order
   // !!!! WARNING: If any value above 255 is required in this array, changes MUST be made to is2ByteEntry() function !!!!
-  static constexpr byte PROGMEM fsIntIndex[] = {4, 14, 17, 22, 26, 28, 33, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64, 66, 68, 70, 72, 76, 78, 80, 82, 86, 88, 90, 93, 95, 99, 104, 111, 121, 125 };
+  static constexpr byte PROGMEM fsIntIndex[] = {4, 14, 17, 22, 26, 28, 33, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64, 66, 68, 70, 72, 76, 78, 80, 82, 86, 88, 90, 93, 95, 99, 104, 111, 121, 125, 130, 132, 134, 136 };
 
   unsigned int bot = 0U;
   unsigned int mid = _countof(fsIntIndex);

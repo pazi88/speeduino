@@ -48,7 +48,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "load_source.h"
 #include RTC_LIB_H //Defined in each boards .h file
 #include BOARD_H //Note that this is not a real file, it is defined in globals.h. 
-
+#include "units.h"
 
 uint16_t req_fuel_uS = 0; /**< The required fuel variable (As calculated by TunerStudio) in uS */
 uint16_t inj_opentime_uS = 0;
@@ -57,17 +57,25 @@ uint8_t ignitionChannelsOn; /**< The current state of the ignition system (on or
 uint8_t ignitionChannelsPending = 0; /**< Any ignition channels that are pending injections before they are resumed */
 uint8_t fuelChannelsOn; /**< The current state of the fuel system (on or off) */
 uint32_t rollingCutLastRev = 0; /**< Tracks whether we're on the same or a different rev for the rolling cut */
+uint32_t revLimitAllowedEndTime = 0;
 
 uint16_t staged_req_fuel_mult_pri = 0;
 uint16_t staged_req_fuel_mult_sec = 0;   
+
+static table2D_u8_u16_4 injectorAngleTable(&configPage2.injAngRPM, &configPage2.injAng);
+static table2D_u8_u8_8 rotarySplitTable(&configPage10.rotarySplitBins, &configPage10.rotarySplitValues);
+static table2D_i8_u8_4 rollingCutTable(&configPage15.rollingProtRPMDelta, &configPage15.rollingProtCutPercent);
+static table2D_u8_u8_10 idleTargetTable(&configPage6.iacBins, &configPage6.iacCLValues);
+
 #ifndef UNIT_TEST // Scope guard for unit testing
+
 void setup(void)
 {
   currentStatus.initialisationComplete = false; //Tracks whether the initialiseAll() function has run completely
   initialiseAll();
 }
 
-inline uint16_t applyFuelTrimToPW(trimTable3d *pTrimTable, int16_t fuelLoad, int16_t RPM, uint16_t currentPW)
+inline uint16_t applyFuelTrimToPW(trimTable3d *pTrimTable, uint16_t fuelLoad, int16_t RPM, uint16_t currentPW)
 {
     uint8_t pw1percent = 100U + get3DTableValue(pTrimTable, fuelLoad, RPM) - OFFSET_FUELTRIM;
     return percentage(pw1percent, currentPW);
@@ -111,22 +119,20 @@ void __attribute__((always_inline)) loop(void)
       }
 
       //Check for any new or in-progress requests from serial.
-      if (Serial.available()>0 || serialRecieveInProgress())
+      if( (Serial.available() > 0) || serialRecieveInProgress() )
       {
         serialReceive();
       }
       
-      //Check for any CAN comms requiring action 
-      #if defined(secondarySerial_AVAILABLE)
-        //if can or secondary serial interface is enabled then check for requests.
-        if (configPage9.enable_secondarySerial == 1)  //secondary serial interface enabled
-        {
-          if ( ((mainLoopCount & 31) == 1) || (secondarySerial.available() > SERIAL_BUFFER_THRESHOLD) )
-          {
-            if (secondarySerial.available() > 0)  { secondserial_Command(); }
-          } 
-        }
-      #endif
+      //Check for any secondary comms requiring action. Note that AVR runs this at a fixed 30Hz. 
+      if (configPage9.enable_secondarySerial == 1)  //secondary serial interface enabled
+      {
+        #ifndef CORE_AVR
+          if (secondarySerial.available() > 0)  { secondserial_Command(); }
+        #else
+          if (secondarySerial.available() > SERIAL_BUFFER_THRESHOLD) { secondserial_Command(); } //Special case for AVR units. This prevents potential overflow of the receive buffer
+        #endif
+      }
       #if defined (NATIVE_CAN_AVAILABLE)
         if (configPage9.enable_intcan == 1) // use internal can module
         {            
@@ -247,6 +253,14 @@ void __attribute__((always_inline)) loop(void)
         if(configPage13.onboard_log_file_rate == LOGGER_RATE_30HZ) { writeSDLogEntry(); }
       #endif
 
+      //AVR units process secondary serial requests at a fixed 30Hz
+      #ifdef CORE_AVR
+      if( (configPage9.enable_secondarySerial == 1) && (secondarySerial.available() > 0) ) //secondary serial interface enabled
+      {
+        secondserial_Command();
+      }
+      #endif
+
       //Check for any outstanding EEPROM writes.
       if( (isEepromWritePending() == true) && (serialStatusFlag == SERIAL_INACTIVE) && (micros() > deferEEPROMWritesUntil)) { writeAllConfig(); } 
     }
@@ -306,19 +320,18 @@ void __attribute__((always_inline)) loop(void)
       //Lookup the current target idle RPM. This is aligned with coolant and so needs to be calculated at the same rate CLT is read
       if( (configPage2.idleAdvEnabled >= 1) || (configPage6.iacAlgorithm != IAC_ALGORITHM_NONE) )
       {
-        currentStatus.CLIdleTarget = (byte)table2D_getValue(&idleTargetTable, currentStatus.coolant + CALIBRATION_TEMPERATURE_OFFSET); //All temps are offset by 40 degrees
+        currentStatus.CLIdleTarget = (byte)table2D_getValue(&idleTargetTable, temperatureAddOffset(currentStatus.coolant)); //All temps are offset by 40 degrees
         if(BIT_CHECK(currentStatus.airConStatus, BIT_AIRCON_TURNING_ON)) { currentStatus.CLIdleTarget += configPage15.airConIdleUpRPMAdder;  } //Adds Idle Up RPM amount if active
       }
 
       #ifdef SD_LOGGING
         if(configPage13.onboard_log_file_rate == LOGGER_RATE_4HZ) { writeSDLogEntry(); }
-        syncSDLog(); //Sync the SD log file to the card 4 times per second. 
       #endif  
       
       currentStatus.fuelPressure = getFuelPressure();
       currentStatus.oilPressure = getOilPressure();
       
-      if(auxIsEnabled == true)
+      if(BIT_CHECK(statusSensors, BIT_SENSORS_AUX_ENBL))
       {
         //TODO dazq to clean this right up :)
         //check through the Aux input channels if enabled for Can or local use
@@ -378,6 +391,7 @@ void __attribute__((always_inline)) loop(void)
     if (BIT_CHECK(LOOP_TIMER, BIT_TIMER_1HZ)) //Once per second)
     {
       BIT_CLEAR(TIMER_mask, BIT_TIMER_1HZ);
+      currentStatus.systemTemp = getSystemTemp();
       readBaro(); //Infrequent baro readings are not an issue.
 
       if ( (configPage10.wmiEnabled > 0) && (configPage10.wmiIndicatorEnabled > 0) )
@@ -396,6 +410,12 @@ void __attribute__((always_inline)) loop(void)
 
       #ifdef SD_LOGGING
         if(configPage13.onboard_log_file_rate == LOGGER_RATE_1HZ) { writeSDLogEntry(); }
+        //SD log sync can take up to 8ms on slow SD cards. To prevent potential issues we only perform this if the RPM is under a safe speed so that there will always be sufficient time for a main loop to run. 
+        //A sync will be forced if it hasn't taken place within a max period
+        if( (currentStatus.RPM < SD_SYNC_RPM_THRESHOLD) || (msSinceLastSDSync > SD_SYNC_MAX_TIME_PERIOD) )
+        { 
+          if(syncSDLog()) { msSinceLastSDSync = 0; } //Run SD sync and reset  
+        }
       #endif
 
     } //1Hz timer
@@ -795,7 +815,21 @@ void __attribute__((always_inline)) loop(void)
       maxAllowedRPM = maxAllowedRPM * 100; //All of the above limits are divided by 100, convert back to RPM
       if ( (currentStatus.flatShiftingHard == true) && (currentStatus.clutchEngagedRPM < maxAllowedRPM) ) { maxAllowedRPM = currentStatus.clutchEngagedRPM; } //Flat shifting is a special case as the RPM limit is based on when the clutch was engaged. It is not divided by 100 as it is set with the actual RPM
     
-      if( (configPage2.hardCutType == HARD_CUT_FULL) && (currentStatus.RPM > maxAllowedRPM) )
+      if(currentStatus.RPM >= maxAllowedRPM)
+      {
+        //if(!BIT_CHECK(currentStatus.status2, BIT_STATUS2_HRDLIM)) { revLimitAllowedEndTime = micros() + angleToTimeMicroSecPerDegree(360); } //Hard limit must run for a minimum of 1 revolution. This is essentially a hysteresis check. 
+        BIT_SET(currentStatus.status2, BIT_STATUS2_HRDLIM);
+      }
+      else if(BIT_CHECK(currentStatus.status2, BIT_STATUS2_HRDLIM))
+      {
+        //if(micros() > revLimitAllowedEndTime) //Hysteresis check disabled for now. 
+        {
+          revLimitAllowedEndTime = 0;
+          BIT_CLEAR(currentStatus.status2, BIT_STATUS2_HRDLIM);
+        }
+      }
+
+      if( (configPage2.hardCutType == HARD_CUT_FULL) && BIT_CHECK(currentStatus.status2, BIT_STATUS2_HRDLIM) )
       {
         //Full hard cut turns outputs off completely. 
         switch(configPage6.engineProtectType)
@@ -808,13 +842,17 @@ void __attribute__((always_inline)) loop(void)
             break;
           case PROTECT_CUT_IGN:
             ignitionChannelsOn = 0;
+            disableAllIgnSchedules();
             break;
           case PROTECT_CUT_FUEL:
             fuelChannelsOn = 0;
+            disableAllFuelSchedules();
             break;
           case PROTECT_CUT_BOTH:
             ignitionChannelsOn = 0;
             fuelChannelsOn = 0;
+            disableAllIgnSchedules();
+            disableAllFuelSchedules();
             break;
           default:
             ignitionChannelsOn = 0;
@@ -834,7 +872,7 @@ void __attribute__((always_inline)) loop(void)
           uint8_t cutPercent = 0;
           int16_t rpmDelta = currentStatus.RPM - maxAllowedRPM;
           if(rpmDelta >= 0) { cutPercent = 100; } //If the current RPM is over the max allowed RPM then cut is full (100%)
-          else { cutPercent = table2D_getValue(&rollingCutTable, (rpmDelta / 10) ); } //
+          else { cutPercent = table2D_getValue(&rollingCutTable, (int8_t)(rpmDelta / 10) ); } //
           
 
           for(uint8_t x=0; x<max(maxIgnOutputs, maxInjOutputs); x++)
@@ -850,17 +888,17 @@ void __attribute__((always_inline)) loop(void)
                   break;
                 case PROTECT_CUT_IGN:
                   BIT_CLEAR(ignitionChannelsOn, x); //Turn off this ignition channel
-                  disablePendingIgnSchedule(x);
+                  disableIgnSchedule(x);
                   break;
                 case PROTECT_CUT_FUEL:
                   BIT_CLEAR(fuelChannelsOn, x); //Turn off this fuel channel
-                  disablePendingFuelSchedule(x);
+                  disableFuelSchedule(x);
                   break;
                 case PROTECT_CUT_BOTH:
                   BIT_CLEAR(ignitionChannelsOn, x); //Turn off this ignition channel
                   BIT_CLEAR(fuelChannelsOn, x); //Turn off this fuel channel
-                  disablePendingFuelSchedule(x);
-                  disablePendingIgnSchedule(x);
+                  disableFuelSchedule(x);
+                  disableIgnSchedule(x);
                   break;
                 default:
                   BIT_CLEAR(ignitionChannelsOn, x); //Turn off this ignition channel
@@ -1345,7 +1383,7 @@ void calculateIgnitionAngles(uint16_t dwellAngle)
       else if(configPage4.sparkMode == IGN_MODE_ROTARY)
       {
         byte splitDegrees = 0;
-        splitDegrees = table2D_getValue(&rotarySplitTable, currentStatus.ignLoad);
+        splitDegrees = table2D_getValue(&rotarySplitTable, (uint8_t)currentStatus.ignLoad);
 
         //The trailing angles are set relative to the leading ones
         calculateIgnitionTrailingRotary(dwellAngle, splitDegrees, ignition1EndAngle, &ignition3EndAngle, &ignition3StartAngle);
@@ -1653,6 +1691,8 @@ void checkLaunchAndFlatShift()
   {
     if(configPage6.launchHiLo > 0) { currentStatus.clutchTrigger = digitalRead(pinLaunch); }
     else { currentStatus.clutchTrigger = !digitalRead(pinLaunch); }
+
+    BIT_WRITE(currentStatus.status5, BIT_STATUS5_CLUTCH_PRESS, currentStatus.clutchTrigger); //Stores the value to send to TunerStudio
   }
   if(currentStatus.clutchTrigger && (currentStatus.previousClutchTrigger != currentStatus.clutchTrigger) ) { currentStatus.clutchEngagedRPM = currentStatus.RPM; } //Check whether the clutch has been engaged or disengaged and store the current RPM if so
 
